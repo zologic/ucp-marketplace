@@ -24,7 +24,7 @@ export interface Merchant {
   domain: string;
   ucp_endpoint?: string;
   public_key?: string;
-  status: 'pending' | 'verified' | 'active' | 'suspended';
+  status: 'pending' | 'verified' | 'active' | 'suspended' | 'PENDING' | 'VERIFIED' | 'ACTIVE' | 'SUSPENDED' | 'DISABLED' | 'VERIFICATION_FAILED';
   admin_override?: boolean;
   last_verified_at?: string;
   created_at: string;
@@ -47,7 +47,7 @@ export interface Invoice {
   period_end: string;
   total_cents: number;
   currency: string;
-  status: 'draft' | 'issued' | 'paid' | 'overdue';
+  status: 'draft' | 'issued' | 'paid' | 'overdue' | 'DRAFT' | 'ISSUED' | 'PAID' | 'OVERDUE' | 'SENT';
   issued_at?: string;
   paid_at?: string;
   due_at?: string;
