@@ -69,7 +69,7 @@ function AppRoutes() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <BrowserRouter basename="/admin-ui">
         <AuthProvider>
           <AppRoutes />
           <Toaster />
