@@ -10,15 +10,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.21.0",
-    "@tanstack/react-query": "^5.17.0",
-    "axios": "^1.6.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "@tanstack/react-query": "^5.59.20",
+    "axios": "^1.7.9",
     "chart.js": "^4.4.1",
     "react-chartjs-2": "^5.2.0",
     "date-fns": "^3.0.6",
-    "lucide-react": "^0.307.0",
+    "lucide-react": "^0.460.0",
     "@radix-ui/react-slot": "^1.0.2",
     "@radix-ui/react-dialog": "^1.0.5",
     "@radix-ui/react-dropdown-menu": "^2.0.6",
@@ -33,17 +33,17 @@
   "devDependencies": {
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
-    "@typescript-eslint/eslint-plugin": "^6.14.0",
-    "@typescript-eslint/parser": "^6.14.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.16",
-    "eslint": "^8.55.0",
+    "eslint": "^8.57.1",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
-    "typescript": "^5.2.2",
-    "vite": "^5.0.8"
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11"
   }
 }

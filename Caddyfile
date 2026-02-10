@@ -32,7 +32,6 @@ bizform.app {
 
     # Admin UI (development access)
     handle /admin-ui/* {
-        uri strip_prefix /admin-ui
         reverse_proxy admin:5173
     }
 
@@ -75,7 +74,6 @@ bizform.app {
 
     # Route /admin-ui/* requests to admin dashboard (development)
     handle /admin-ui/* {
-        uri strip_prefix /admin-ui
         reverse_proxy admin:5173
     }
 
