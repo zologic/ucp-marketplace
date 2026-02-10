@@ -352,6 +352,143 @@ async function verifyMerchantUCP(merchantId, db) {
     }
 }
 
+// GET /admin/merchants/:id/cpc/preview - Preview CPC billing impact
+router.get('/merchants/:id/cpc/preview', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { rate, days = 30 } = req.query;
+
+        // Validation
+        if (!rate || rate <= 0) {
+            return res.status(400).json({
+                error: 'rate parameter required and must be positive'
+            });
+        }
+
+        const previewRate = parseFloat(rate);
+        const previewDays = Math.min(parseInt(days), 90); // Max 90 days
+
+        // Fetch merchant
+        const merchantResult = await req.app.locals.db.query(`
+            SELECT id, domain, tenant_id, cpc_billing_enabled, cpc_enabled_at, cpc_rate
+            FROM merchants
+            WHERE id = $1
+        `, [id]);
+
+        if (merchantResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Merchant not found' });
+        }
+
+        const merchant = merchantResult.rows[0];
+
+        // Calculate preview period
+        const periodEnd = new Date();
+        const periodStart = new Date();
+        periodStart.setDate(periodStart.getDate() - previewDays);
+
+        // Get click count and distribution
+        const clickStatsResult = await req.app.locals.db.query(`
+            SELECT
+                COUNT(*) as total_clicks,
+                COUNT(DISTINCT DATE(ce.clicked_at)) as active_days,
+                COUNT(DISTINCT se.query) as unique_queries
+            FROM click_events ce
+            LEFT JOIN search_events se ON ce.search_id = se.id
+            WHERE ce.merchant_id = $1
+              AND ce.clicked_at >= $2
+              AND ce.clicked_at <= $3
+        `, [id, periodStart.toISOString(), periodEnd.toISOString()]);
+
+        const clickStats = clickStatsResult.rows[0];
+        const totalClicks = parseInt(clickStats.total_clicks) || 0;
+        const avgClicksPerDay = previewDays > 0 ? (totalClicks / previewDays).toFixed(1) : 0;
+
+        // Calculate estimated cost
+        const estimatedCostCents = totalClicks * previewRate;
+
+        // Get top queries driving clicks
+        const topQueriesResult = await req.app.locals.db.query(`
+            SELECT
+                se.query,
+                COUNT(*) as click_count
+            FROM click_events ce
+            JOIN search_events se ON ce.search_id = se.id
+            WHERE ce.merchant_id = $1
+              AND ce.clicked_at >= $2
+              AND ce.clicked_at <= $3
+            GROUP BY se.query
+            ORDER BY click_count DESC
+            LIMIT 10
+        `, [id, periodStart.toISOString(), periodEnd.toISOString()]);
+
+        // Calculate conversion rate if order data exists
+        const conversionResult = await req.app.locals.db.query(`
+            SELECT
+                COUNT(DISTINCT o.id) as total_orders
+            FROM orders o
+            WHERE o.merchant_id = $1
+              AND o.created_at >= $2
+              AND o.created_at <= $3
+        `, [id, periodStart.toISOString(), periodEnd.toISOString()]);
+
+        const totalOrders = parseInt(conversionResult.rows[0].total_orders) || 0;
+        const conversionRate = totalClicks > 0 ? ((totalOrders / totalClicks) * 100).toFixed(2) : 0;
+
+        // Generate recommendation
+        let recommendation = 'insufficient_data';
+        if (totalClicks >= 100) {
+            if (conversionRate >= 2) {
+                recommendation = 'recommended'; // Good conversion
+            } else if (conversionRate >= 1) {
+                recommendation = 'monitor'; // Marginal conversion
+            } else {
+                recommendation = 'not_recommended'; // Low conversion
+            }
+        }
+
+        res.json({
+            merchant: {
+                id: merchant.id,
+                domain: merchant.domain,
+                cpc_currently_enabled: merchant.cpc_billing_enabled,
+                current_rate: merchant.cpc_rate
+            },
+            preview: {
+                rate_cents: previewRate,
+                period_days: previewDays,
+                period_start: periodStart.toISOString().split('T')[0],
+                period_end: periodEnd.toISOString().split('T')[0]
+            },
+            summary: {
+                total_clicks: totalClicks,
+                active_days: parseInt(clickStats.active_days) || 0,
+                unique_queries: parseInt(clickStats.unique_queries) || 0,
+                avg_clicks_per_day: parseFloat(avgClicksPerDay),
+                estimated_total_cost_cents: estimatedCostCents,
+                estimated_total_cost_formatted: `€${(estimatedCostCents / 100).toFixed(2)}`,
+                conversion_rate: parseFloat(conversionRate),
+                total_orders: totalOrders
+            },
+            top_queries: topQueriesResult.rows.map(row => ({
+                query: row.query,
+                clicks: parseInt(row.click_count),
+                estimated_cost_cents: parseInt(row.click_count) * previewRate,
+                estimated_cost_formatted: `€${((parseInt(row.click_count) * previewRate) / 100).toFixed(2)}`
+            })),
+            recommendation: {
+                status: recommendation,
+                message: getRecommendationMessage(recommendation, totalClicks, conversionRate)
+            }
+        });
+
+    } catch (error) {
+        console.error('[CPC Preview] Error:', error);
+        res.status(500).json({
+            error: 'Failed to generate CPC preview'
+        });
+    }
+});
+
 // PATCH /admin/merchants/:id/cpc - Toggle CPC billing
 router.patch('/merchants/:id/cpc', requireAuth, async (req, res) => {
     try {
@@ -475,6 +612,21 @@ async function triggerMCPReload() {
     } catch (error) {
         console.error('MCP reload request failed:', error.message);
         // Don't throw, as this is not critical
+    }
+}
+
+// Helper: Generate CPC recommendation message
+function getRecommendationMessage(status, totalClicks, conversionRate) {
+    switch (status) {
+        case 'recommended':
+            return `Strong performance: ${totalClicks} clicks with ${conversionRate}% conversion. CPC enablement recommended.`;
+        case 'monitor':
+            return `Moderate performance: ${totalClicks} clicks with ${conversionRate}% conversion. Consider monitoring before enablement.`;
+        case 'not_recommended':
+            return `Low conversion: ${totalClicks} clicks with ${conversionRate}% conversion. CPC enablement not recommended yet.`;
+        case 'insufficient_data':
+        default:
+            return `Insufficient data: Only ${totalClicks} clicks recorded. Wait for more traffic before enabling CPC.`;
     }
 }
 
