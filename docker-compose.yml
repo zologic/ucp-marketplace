@@ -27,6 +27,20 @@ services:
       - public
     restart: unless-stopped
 
+  # Admin Dashboard - React admin interface
+  admin:
+    build:
+      context: ./admin-dashboard
+      dockerfile: Dockerfile
+    container_name: ucpready-admin
+    networks:
+      - public
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - api
+    restart: unless-stopped
+
   # API - Backend REST API
   api:
     build:
