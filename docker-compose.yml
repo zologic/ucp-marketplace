@@ -27,10 +27,10 @@ services:
       - public
     restart: unless-stopped
 
-  # Admin Dashboard - Simple HTML admin interface
+  # Admin Dashboard - React admin interface
   admin:
     build:
-      context: ./admin-dashboard-simple
+      context: ./admin-dashboard
       dockerfile: Dockerfile
     container_name: ucpready-admin
     networks:
