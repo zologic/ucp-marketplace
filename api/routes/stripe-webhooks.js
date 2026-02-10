@@ -6,7 +6,12 @@
 
 const express = require('express');
 const router = express.Router();
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+// Only initialize Stripe if API key is provided
+const stripe = process.env.STRIPE_SECRET_KEY
+    ? require('stripe')(process.env.STRIPE_SECRET_KEY)
+    : null;
+
 const nodemailer = require('nodemailer');
 
 // Email configuration for admin notifications
@@ -23,6 +28,14 @@ const mailTransport = nodemailer.createTransport({
 // POST /api/webhooks/stripe - Stripe webhook endpoint
 // NOTE: This route must use express.raw() middleware (configured in server.js)
 router.post('/stripe', async (req, res) => {
+    // Check if Stripe is configured
+    if (!stripe) {
+        return res.status(503).json({
+            error: 'Stripe not configured',
+            message: 'Webhook endpoint requires STRIPE_SECRET_KEY to be set'
+        });
+    }
+
     const sig = req.headers['stripe-signature'];
 
     let event;
