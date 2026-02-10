@@ -309,8 +309,8 @@ Apache License 2.0 - See LICENSE file for details
 ## Support
 
 - **Issues:** https://github.com/your-org/ucp-marketplace/issues
-- **Documentation:** https://docs.ucpready.io
-- **Email:** support@ucpready.io
+- **Documentation:** https://docs.zologic.nl
+- **Email:** support@zologic.nl
 
 ## Roadmap
 
@@ -326,6 +326,6 @@ Apache License 2.0 - See LICENSE file for details
 
 ## Credits
 
-Built on the [Universal Commerce Protocol (UCP)](https://ucp-protocol.org) specification.
+Built on the [Universal Commerce Protocol (UCP)](https://ucp.dev/latest/) specification.
 
-Compatible with [UCPReady WooCommerce Plugin](https://github.com/ucpready/wordpress-plugin) v1.1.2+.
+Compatible with [UCPReady WooCommerce Plugin](https://woocommerce.com/vendor/zologic) v1.1.2+.
