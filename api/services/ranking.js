@@ -1,10 +1,50 @@
 /**
  * Product Ranking Service
  * Production-grade ranking optimized for checkout completion
+ * Enhanced with performance-aware conversion rate scoring (MOAT)
  */
 
 /**
- * Calculate merchant trust score
+ * Calculate conversion rate with minimum sample threshold
+ * This is the MOAT-creating ranking signal
+ */
+function calculateConversionRate(totalClicks, totalOrders) {
+    const MINIMUM_SAMPLE = 10; // Need at least 10 clicks for reliable conversion data
+
+    if (totalClicks < MINIMUM_SAMPLE) {
+        return null; // Not enough data - use fallback scoring
+    }
+
+    return totalOrders / totalClicks;
+}
+
+/**
+ * Calculate performance score (conversion × trust × freshness)
+ * Primary moat-creating ranking signal
+ */
+function calculatePerformanceScore(product) {
+    const conversionRate = calculateConversionRate(
+        product.total_clicks,
+        product.total_orders
+    );
+
+    // Use pre-calculated trust_score from merchants table (populated by calculateTrustScores job)
+    const trustScore = product.trust_score || 0.5; // Default if not calculated yet
+
+    const freshnessScore = calculateFreshnessScore(product);
+
+    if (conversionRate === null) {
+        // Insufficient data - use trust × freshness only
+        // Apply 0.5 penalty for unproven products
+        return trustScore * freshnessScore * 0.5;
+    }
+
+    // Proven products: conversion × trust × freshness
+    return conversionRate * trustScore * freshnessScore;
+}
+
+/**
+ * Calculate merchant trust score (DEPRECATED - use pre-calculated trust_score from DB)
  * Based on historical performance metrics
  */
 async function calculateMerchantTrust(merchantId, db) {
@@ -154,49 +194,34 @@ function applyDiversityBoost(rankedProducts) {
 
 /**
  * Rank products using multi-factor scoring
- * Optimized for checkout completion, not cheapest price
+ * ENHANCED: Performance-aware ranking (conversion rate as primary signal)
+ * Creates self-reinforcing quality loop - THE MOAT
  */
 async function rankProducts(products, intent, db, categoryWeights = null) {
-    // Default weights (adjust per category)
-    const weights = categoryWeights || {
-        availability: 0.30,
-        price: 0.25,
-        trust: 0.20,
-        relevance: 0.15,
-        diversity: 0.10
-    };
-
-    // Calculate merchant trust scores (batch)
-    const merchantIds = [...new Set(products.map(p => p.merchant_id))];
-    const trustScores = {};
-
-    for (const merchantId of merchantIds) {
-        trustScores[merchantId] = await calculateMerchantTrust(merchantId, db);
-    }
-
-    // Score each product
+    // Score each product using performance-aware logic
     const scoredProducts = products.map(product => {
+        // MOAT-CREATING: Performance score (conversion × trust × freshness)
+        const performanceScore = calculatePerformanceScore(product);
+
+        // Calculate other signals for tiebreaking
         const availabilityScore = calculateAvailabilityScore(product);
         const priceScore = calculatePriceScore(product, intent);
-        const trustScore = trustScores[product.merchant_id] || 0.5;
         const relevanceScore = calculateRelevanceScore(product, intent);
-        const freshnessScore = calculateFreshnessScore(product);
 
-        // Calculate final weighted score
+        // Final score: performance dominant (70%), others for tiebreaking (30%)
+        // This creates the defensible moat through proven conversion data
         const finalScore =
-            weights.availability * availabilityScore +
-            weights.price * priceScore +
-            weights.trust * trustScore +
-            weights.relevance * relevanceScore +
-            0.05 * freshnessScore; // 5% weight for freshness (keeps it small)
+            performanceScore * 0.70 +
+            availabilityScore * 0.10 +
+            priceScore * 0.10 +
+            relevanceScore * 0.10;
 
         return {
             ...product,
+            performance_score: performanceScore,
             availability_score: availabilityScore,
             price_score: priceScore,
-            trust_score: trustScore,
             relevance_score: relevanceScore,
-            freshness_score: freshnessScore,
             final_score: finalScore
         };
     });

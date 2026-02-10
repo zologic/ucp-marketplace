@@ -12,6 +12,8 @@ const adminRoutes = require('./routes/admin');
 const webhookRoutes = require('./routes/webhooks');
 const internalRoutes = require('./routes/internal');
 const seoRoutes = require('./routes/seo');
+const billingRoutes = require('./routes/billing');
+const stripeWebhookRoutes = require('./routes/stripe-webhooks');
 
 // Import middleware
 const { resolveTenant } = require('./middleware/tenant');
@@ -64,6 +66,10 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
+// Stripe webhook route MUST be registered BEFORE body parsing middleware
+// Stripe requires raw body for signature verification
+app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }), stripeWebhookRoutes);
+
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -78,6 +84,9 @@ app.use('/', resolveTenant, seoRoutes);
 
 // Public API routes (tenant-aware)
 app.use('/api', resolveTenant, publicRoutes);
+
+// Billing routes (merchant payment management)
+app.use('/api/billing', resolveTenant, billingRoutes);
 
 // Admin routes (no tenant resolution, JWT auth)
 app.use('/admin', adminRoutes);

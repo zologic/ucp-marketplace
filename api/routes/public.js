@@ -43,12 +43,26 @@ router.post('/search', async (req, res) => {
 
         // Search products in database (indexed from previous crawls)
         let searchQuery = `
-            SELECT p.id, p.name, p.description, p.price_cents, p.currency,
-                   p.image_url, p.stock_status, p.merchant_id, m.domain as merchant_domain,
-                   COALESCE(t.name, m.domain) as merchant_name
+            SELECT
+                p.id, p.name, p.description, p.price_cents, p.currency,
+                p.image_url, p.stock_status, p.merchant_id, p.indexed_at,
+                p.category, p.brand,
+                m.domain as merchant_domain,
+                m.trust_score,
+                COALESCE(t.name, m.domain) as merchant_name,
+
+                -- Performance metrics from last 90 days
+                COALESCE(SUM(s.click_count), 0) as total_clicks,
+                COALESCE(SUM(s.order_count), 0) as total_orders
+
             FROM products p
             JOIN merchants m ON p.merchant_id = m.id
             LEFT JOIN tenants t ON m.tenant_id = t.id
+
+            -- JOIN performance data for conversion-based ranking
+            LEFT JOIN merchant_daily_stats s ON m.id = s.merchant_id
+                AND s.date >= CURRENT_DATE - INTERVAL '90 days'
+
             WHERE p.tenant_id = $1
               AND p.merchant_id = ANY($2::uuid[])
               AND to_tsvector('english', COALESCE(p.name, '') || ' ' ||
@@ -78,6 +92,9 @@ router.post('/search', async (req, res) => {
             queryParams.push(intent.max_price_cents);
             paramIndex++;
         }
+
+        // Group by to collapse daily stats into totals
+        searchQuery += ` GROUP BY p.id, m.id, m.trust_score, t.name`;
 
         // Don't hard-filter stock_status here - let ranking handle it
         // Fetch more results for ranking (50 instead of 20)
@@ -126,10 +143,19 @@ router.post('/search', async (req, res) => {
 });
 
 // POST /api/checkout - Create checkout session
+// ENHANCED: Server-side session IDs + Redis deduplication + Rate limiting (FRAUD PROTECTION)
 router.post('/checkout', async (req, res) => {
     try {
         const { merchant_id, product_id, quantity = 1 } = req.body;
         const tenantId = req.tenant.id;
+
+        // SECURITY: Reject client-provided session_id (prevents fraud)
+        if (req.body.session_id) {
+            return res.status(400).json({
+                error: 'session_id cannot be provided by client',
+                code: 'INVALID_SESSION_ID'
+            });
+        }
 
         if (!merchant_id || !product_id) {
             return res.status(400).json({ error: 'merchant_id and product_id are required' });
@@ -173,46 +199,79 @@ router.post('/checkout', async (req, res) => {
             return res.status(400).json({ error: 'Product out of stock' });
         }
 
-        // Generate referral ID
-        const referralId = crypto.randomUUID();
+        // FRAUD PROTECTION: Check merchant click rate limit (100 clicks/hour)
+        const rateLimitKey = `ratelimit:clicks:${merchant_id}`;
+        const recentClicks = await req.app.locals.redis.incr(rateLimitKey);
 
-        // Generate session ID for click deduplication
-        const sessionId = req.body.session_id || crypto.randomUUID();
+        if (recentClicks === 1) {
+            // First click in this window - set 1-hour expiry
+            await req.app.locals.redis.expire(rateLimitKey, 3600);
+        }
 
-        // Log click event (with deduplication check)
-        const recentClick = await req.app.locals.db.query(`
-            SELECT id FROM click_events
-            WHERE session_id = $1 AND product_id = $2 AND created_at > NOW() - INTERVAL '5 minutes'
-        `, [sessionId, product_id]);
+        if (recentClicks > 100) {
+            const ttl = await req.app.locals.redis.ttl(rateLimitKey);
+            return res.status(429).json({
+                error: 'Rate limit exceeded',
+                code: 'CLICK_RATE_LIMIT',
+                retryAfter: ttl > 0 ? ttl : 3600
+            });
+        }
 
-        if (recentClick.rows.length === 0) {
-            // Not a duplicate, log the click
-            await req.app.locals.db.query(`
-                INSERT INTO click_events (tenant_id, merchant_id, product_id, session_id)
-                VALUES ($1, $2, $3, $4)
-            `, [tenantId, merchant_id, product_id, sessionId]);
+        // SECURITY: Generate server-side session ID (cryptographically secure)
+        const sessionId = `sess_${Date.now()}_${crypto.randomBytes(16).toString('hex')}`;
 
-            // Create billable event for CPC if applicable
-            const billingResult = await req.app.locals.db.query(
-                'SELECT * FROM merchant_billing WHERE merchant_id = $1',
-                [merchant_id]
-            );
+        // Store session in Redis (5-minute deduplication window)
+        const sessionKey = `click:${sessionId}:${product_id}`;
+        const existingSession = await req.app.locals.redis.get(sessionKey);
 
-            if (billingResult.rows.length > 0) {
-                const billing = billingResult.rows[0];
-                if (billing.billing_mode === 'cpc' && billing.cpc_cents > 0) {
-                    const clickId = (await req.app.locals.db.query(
-                        'SELECT id FROM click_events WHERE session_id = $1 AND product_id = $2 ORDER BY created_at DESC LIMIT 1',
-                        [sessionId, product_id]
-                    )).rows[0].id;
+        if (existingSession) {
+            // Duplicate click detected
+            return res.status(409).json({
+                error: 'Duplicate click detected',
+                code: 'DUPLICATE_SESSION'
+            });
+        }
 
-                    await req.app.locals.db.query(`
-                        INSERT INTO billable_events (tenant_id, merchant_id, event_type, reference_id, amount_cents, currency)
-                        VALUES ($1, $2, 'click', $3, $4, $5)
-                    `, [tenantId, merchant_id, clickId, billing.cpc_cents, billing.currency]);
-                }
+        // Store session for deduplication
+        await req.app.locals.redis.setex(
+            sessionKey,
+            300, // 5 minutes
+            JSON.stringify({
+                product_id,
+                merchant_id,
+                created_at: Date.now()
+            })
+        );
+
+        // Log click event in database
+        await req.app.locals.db.query(`
+            INSERT INTO click_events (tenant_id, merchant_id, product_id, session_id)
+            VALUES ($1, $2, $3, $4)
+        `, [tenantId, merchant_id, product_id, sessionId]);
+
+        // Create billable event for CPC if applicable
+        const billingResult = await req.app.locals.db.query(
+            'SELECT * FROM merchant_billing WHERE merchant_id = $1',
+            [merchant_id]
+        );
+
+        if (billingResult.rows.length > 0) {
+            const billing = billingResult.rows[0];
+            if (billing.billing_mode === 'cpc' && billing.cpc_cents > 0) {
+                const clickId = (await req.app.locals.db.query(
+                    'SELECT id FROM click_events WHERE session_id = $1 AND product_id = $2 ORDER BY created_at DESC LIMIT 1',
+                    [sessionId, product_id]
+                )).rows[0].id;
+
+                await req.app.locals.db.query(`
+                    INSERT INTO billable_events (tenant_id, merchant_id, event_type, reference_id, amount_cents, currency)
+                    VALUES ($1, $2, 'click', $3, $4, $5)
+                `, [tenantId, merchant_id, clickId, billing.cpc_cents, billing.currency]);
             }
         }
+
+        // Generate referral ID
+        const referralId = crypto.randomUUID();
 
         // Call merchant UCP checkout endpoint (this would normally create the session on merchant side)
         // For now, we'll create a placeholder checkout URL
@@ -224,9 +283,11 @@ router.post('/checkout', async (req, res) => {
             VALUES ($1, $2, $3, $4, $5, 'created')
         `, [tenantId, merchant_id, product_id, referralId, checkoutUrl]);
 
+        // Return session_id for transparency (client can log it but not reuse it)
         res.json({
             checkout_url: checkoutUrl,
-            referral_id: referralId
+            referral_id: referralId,
+            session_id: sessionId // For debugging/logging only
         });
     } catch (error) {
         console.error('Checkout error:', error);

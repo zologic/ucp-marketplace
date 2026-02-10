@@ -1,12 +1,25 @@
 /**
  * Webhook Routes
  * Handle webhooks from UCPReady WooCommerce plugin
+ * ENHANCED: Phase 2B fraud detection (high-value orders + AOV anomalies)
  */
 
 const express = require('express');
 const router = express.Router();
 const nacl = require('tweetnacl');
 const util = require('tweetnacl-util');
+const nodemailer = require('nodemailer');
+
+// Email configuration for admin notifications
+const mailTransport = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT || 587,
+    secure: process.env.SMTP_PORT == 465,
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+    }
+});
 
 // POST /api/webhooks/order-completed - Handle order completion webhook
 router.post('/order-completed', async (req, res) => {
@@ -85,6 +98,81 @@ router.post('/order-completed', async (req, res) => {
 
         const orderId = orderResult.rows[0].id;
 
+        // FRAUD DETECTION: Flag high-value orders for manual review
+        const HIGH_VALUE_THRESHOLD = 10000; // €100.00 in cents
+
+        if (total_cents > HIGH_VALUE_THRESHOLD) {
+            await req.app.locals.db.query(`
+                INSERT INTO order_reviews (order_id, merchant_id, revenue_cents, reason, status, created_at)
+                VALUES ($1, $2, $3, 'high_value', 'pending', NOW())
+            `, [orderId, merchant.id, total_cents]);
+
+            // Send admin notification email
+            await sendAdminNotification({
+                subject: `High-Value Order Review: €${(total_cents / 100).toFixed(2)}`,
+                merchant: merchant,
+                order_id: order_id,
+                revenue_cents: total_cents,
+                reason: 'Order value exceeds €100 threshold',
+                action_url: `${process.env.ADMIN_URL || 'https://admin.shopucp.eu'}/orders/${orderId}/review`
+            });
+
+            console.log(`[Webhook] ⚠️  High-value order flagged: ${order_id} (€${total_cents / 100})`);
+        }
+
+        // FRAUD DETECTION: Check for suspiciously low order value (AOV anomaly)
+        const merchantStatsResult = await req.app.locals.db.query(`
+            SELECT
+                AVG(revenue_cents) as avg_revenue,
+                STDDEV(revenue_cents) as stddev_revenue,
+                COUNT(*) as order_count
+            FROM orders
+            WHERE merchant_id = $1
+                AND created_at >= NOW() - INTERVAL '30 days'
+                AND revenue_cents > 0
+        `, [merchant.id]);
+
+        const stats = merchantStatsResult.rows[0];
+
+        if (stats.order_count >= 10) {
+            // Only check anomalies if merchant has 10+ orders (minimum sample for statistical significance)
+            const avgRevenue = parseFloat(stats.avg_revenue);
+            const stddevRevenue = parseFloat(stats.stddev_revenue);
+
+            if (stddevRevenue > 0) {
+                const zScore = (total_cents - avgRevenue) / stddevRevenue;
+
+                // Flag if order is more than 2 standard deviations below average
+                if (zScore < -2) {
+                    await req.app.locals.db.query(`
+                        INSERT INTO order_reviews (order_id, merchant_id, revenue_cents, reason, status, created_at, metadata)
+                        VALUES ($1, $2, $3, 'suspicious_low_value', 'pending', NOW(), $4)
+                    `, [
+                        orderId,
+                        merchant.id,
+                        total_cents,
+                        JSON.stringify({
+                            avg_revenue: avgRevenue,
+                            stddev: stddevRevenue,
+                            z_score: zScore.toFixed(2)
+                        })
+                    ]);
+
+                    // Send admin notification
+                    await sendAdminNotification({
+                        subject: `Suspicious Order: €${(total_cents / 100).toFixed(2)} (AOV Anomaly)`,
+                        merchant: merchant,
+                        order_id: order_id,
+                        revenue_cents: total_cents,
+                        reason: `Order is ${Math.abs(zScore).toFixed(1)} standard deviations below merchant's average (€${(avgRevenue / 100).toFixed(2)})`,
+                        action_url: `${process.env.ADMIN_URL || 'https://admin.shopucp.eu'}/orders/${orderId}/review`
+                    });
+
+                    console.log(`[Webhook] ⚠️  Suspicious low-value order flagged: ${order_id} (z-score: ${zScore.toFixed(2)})`);
+                }
+            }
+        }
+
         // Get merchant billing configuration
         const billingResult = await req.app.locals.db.query(
             'SELECT * FROM merchant_billing WHERE merchant_id = $1',
@@ -152,6 +240,35 @@ function verifySignature(payload, signature, publicKeyBase64) {
     } catch (error) {
         console.error('Signature verification error:', error);
         return false;
+    }
+}
+
+// Helper: Send admin notification email for flagged orders
+async function sendAdminNotification({ subject, merchant, order_id, revenue_cents, reason, action_url }) {
+    try {
+        await mailTransport.sendMail({
+            from: process.env.SMTP_FROM || 'noreply@shopucp.eu',
+            to: process.env.ADMIN_EMAIL || 'admin@shopucp.eu',
+            subject: subject,
+            html: `
+                <h2>Order Review Required</h2>
+                <p><strong>Merchant:</strong> ${merchant.domain}</p>
+                <p><strong>Merchant Order ID:</strong> ${order_id}</p>
+                <p><strong>Revenue:</strong> €${(revenue_cents / 100).toFixed(2)}</p>
+                <p><strong>Reason:</strong> ${reason}</p>
+                <hr>
+                <p><a href="${action_url}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: #ffffff; text-decoration: none; border-radius: 5px;">Review Order</a></p>
+                <p style="color: #666; font-size: 12px; margin-top: 20px;">
+                    This order has been flagged for manual review.
+                    Commission is still calculated but should be verified before payout.
+                </p>
+            `
+        });
+
+        console.log(`[Webhook] ✓ Admin notification sent for order ${order_id}`);
+    } catch (error) {
+        console.error('[Webhook] Failed to send admin notification:', error.message);
+        // Don't throw - email failure shouldn't block order processing
     }
 }
 

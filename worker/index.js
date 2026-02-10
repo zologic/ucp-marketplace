@@ -10,6 +10,7 @@ const { generateInvoices } = require('./jobs/generateInvoices');
 const { generateStatements } = require('./jobs/generateStatements');
 const { enforceNonPayment } = require('./jobs/enforceNonPayment');
 const { generateSitemaps } = require('./jobs/generateSitemaps');
+const { calculateTrustScores } = require('./jobs/calculateTrustScores');
 
 // Database pool
 const db = new Pool({
@@ -87,6 +88,14 @@ cron.schedule('0 3 * * *', () => {
     timezone: 'UTC'
 });
 
+// Trust score calculation - Daily at 04:00 UTC (after stats rollup completes)
+cron.schedule('0 4 * * *', () => {
+    console.log('Running trust score calculation job...');
+    calculateTrustScores(db).catch(err => console.error('Trust score calculation failed:', err));
+}, {
+    timezone: 'UTC'
+});
+
 console.log('Worker service started. Scheduled jobs:');
 console.log('- Merchant verification: Daily at 02:00 UTC');
 console.log('- Product indexing: Every 6 hours');
@@ -95,6 +104,7 @@ console.log('- Invoice generation: Monthly on 1st at 00:00 UTC');
 console.log('- Statement generation: Monthly on 1st at 01:00 UTC');
 console.log('- Non-payment enforcement: Daily at 06:00 UTC');
 console.log('- Sitemap generation: Daily at 03:00 UTC');
+console.log('- Trust score calculation: Daily at 04:00 UTC');
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {

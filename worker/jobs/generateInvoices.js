@@ -1,7 +1,10 @@
 /**
  * Job: Generate Monthly Invoices
  * Frequency: Monthly on 1st at 00:00 UTC
+ * ENHANCED: Stripe integration for automated payment collection
  */
+
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 async function generateInvoices(db) {
     const startTime = Date.now();
@@ -29,6 +32,7 @@ async function generateInvoices(db) {
         console.log(`[generateInvoices] Found ${merchantsResult.rows.length} merchants with unbilled events`);
 
         let invoicesCreated = 0;
+        let stripeFailed = 0;
 
         for (const { merchant_id, tenant_id } of merchantsResult.rows) {
             try {
@@ -45,9 +49,9 @@ async function generateInvoices(db) {
 
                 const billing = billingResult.rows[0];
 
-                // Get merchant CPC billing settings
+                // Get merchant CPC billing settings and Stripe customer ID
                 const merchantResult = await db.query(
-                    'SELECT cpc_billing_enabled, cpc_enabled_at, cpc_rate FROM merchants WHERE id = $1',
+                    'SELECT cpc_billing_enabled, cpc_enabled_at, cpc_rate, stripe_customer_id, domain FROM merchants WHERE id = $1',
                     [merchant_id]
                 );
                 const merchant = merchantResult.rows[0];
@@ -140,6 +144,58 @@ async function generateInvoices(db) {
                     `, [invoiceId, item.description, item.quantity, item.unit_price_cents, item.total_cents]);
                 }
 
+                // STRIPE INTEGRATION: Create Stripe Invoice if customer exists
+                let stripeInvoiceId = null;
+
+                if (merchant.stripe_customer_id) {
+                    try {
+                        // Create Stripe Invoice
+                        const stripeInvoice = await stripe.invoices.create({
+                            customer: merchant.stripe_customer_id,
+                            auto_advance: true, // Automatically finalize
+                            collection_method: 'charge_automatically', // Auto-charge default payment method
+                            metadata: {
+                                internal_invoice_id: invoiceId,
+                                merchant_id: merchant_id,
+                                period_start: periodStartStr,
+                                period_end: periodEndStr
+                            }
+                        });
+
+                        // Add line items to Stripe Invoice
+                        for (const item of invoiceItems) {
+                            await stripe.invoiceItems.create({
+                                customer: merchant.stripe_customer_id,
+                                invoice: stripeInvoice.id,
+                                amount: item.total_cents,
+                                currency: billing.currency.toLowerCase(),
+                                description: item.description
+                            });
+                        }
+
+                        // Finalize invoice (triggers auto-charge)
+                        const finalizedInvoice = await stripe.invoices.finalizeInvoice(stripeInvoice.id);
+
+                        stripeInvoiceId = finalizedInvoice.id;
+
+                        // Update database with Stripe invoice ID
+                        await db.query(
+                            'UPDATE invoices SET stripe_invoice_id = $1 WHERE id = $2',
+                            [stripeInvoiceId, invoiceId]
+                        );
+
+                        console.log(`[generateInvoices] ✓ Stripe invoice created and finalized: ${stripeInvoiceId}`);
+                    } catch (stripeError) {
+                        console.error(`[generateInvoices] Stripe failed for merchant ${merchant.domain}:`, stripeError.message);
+                        stripeFailed++;
+
+                        // Invoice created in database but Stripe failed
+                        // Admin will need to manually handle this
+                    }
+                } else {
+                    console.warn(`[generateInvoices] Merchant ${merchant.domain} has no Stripe customer - manual payment required`);
+                }
+
                 // Mark billable events as invoiced
                 // CRITICAL: Only mark events that were actually included in the invoice
                 await db.query(`
@@ -171,8 +227,15 @@ async function generateInvoices(db) {
 
         const duration = ((Date.now() - startTime) / 1000).toFixed(2);
         console.log(`[generateInvoices] Completed in ${duration}s: ${invoicesCreated} invoices created`);
+        if (stripeFailed > 0) {
+            console.warn(`[generateInvoices] ⚠️  ${stripeFailed} Stripe charges failed - manual intervention required`);
+        }
 
-        return { invoices_created: invoicesCreated, period: { start: periodStartStr, end: periodEndStr } };
+        return {
+            invoices_created: invoicesCreated,
+            stripe_failed: stripeFailed,
+            period: { start: periodStartStr, end: periodEndStr }
+        };
     } catch (error) {
         console.error('[generateInvoices] Job failed:', error);
         throw error;
