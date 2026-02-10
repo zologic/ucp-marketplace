@@ -536,7 +536,7 @@ docker_build_and_start() {
     docker compose up -d 2>&1 | tee -a setup.log
 
     # Wait for API to be healthy
-    log_info "Waiting for API to be ready (migrations will run automatically)..."
+    log_info "Waiting for API to be ready..."
     max_wait=180
     elapsed=0
     while ! curl -f http://localhost/health > /dev/null 2>&1; do
@@ -554,7 +554,25 @@ docker_build_and_start() {
         fi
     done
 
-    log_success "All services are running"
+    log_success "API is healthy"
+
+    # Ensure migrations have completed by checking for schema_migrations table
+    log_info "Verifying database migrations completed..."
+    max_wait=60
+    elapsed=0
+    while ! docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT COUNT(*) FROM schema_migrations" > /dev/null 2>&1; do
+        if [ $elapsed -ge $max_wait ]; then
+            log_error "Migrations did not complete within ${max_wait} seconds"
+            log_error "Check migration logs: docker compose logs api | grep migrate"
+            exit 1
+        fi
+        log_info "Waiting for migrations to complete..."
+        sleep 3
+        elapsed=$((elapsed + 3))
+    done
+
+    MIGRATION_COUNT=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -A -c "SELECT COUNT(*) FROM schema_migrations" 2>/dev/null || echo "0")
+    log_success "Database migrations completed (${MIGRATION_COUNT} migrations applied)"
 }
 
 # =============================================================================
