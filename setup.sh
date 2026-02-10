@@ -602,19 +602,57 @@ bootstrap_system() {
 
     # Insert admin user
     log_info "Creating admin user..."
-    docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" << EOF 2>&1 | tee -a setup.log
+    ADMIN_INSERT_RESULT=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -A << EOF 2>&1
 INSERT INTO admins (email, password_hash, role)
 VALUES ('${ADMIN_EMAIL}', '${ADMIN_PASSWORD_HASH}', 'superadmin')
-ON CONFLICT (email) DO NOTHING;
+ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash
+RETURNING id;
 EOF
+)
+
+    if [ $? -ne 0 ]; then
+        log_error "Failed to create admin user"
+        echo "$ADMIN_INSERT_RESULT" >> setup.log
+        exit 1
+    fi
+
+    echo "$ADMIN_INSERT_RESULT" >> setup.log
+
+    # Verify admin was created
+    ADMIN_COUNT=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -A -c "SELECT COUNT(*) FROM admins WHERE email='${ADMIN_EMAIL}'" 2>/dev/null)
+    if [ "$ADMIN_COUNT" -eq 1 ]; then
+        log_success "Admin user created: ${ADMIN_EMAIL}"
+    else
+        log_error "Admin user verification failed"
+        exit 1
+    fi
 
     # Insert default tenant
     log_info "Creating default tenant..."
-    docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" << EOF 2>&1 | tee -a setup.log
+    TENANT_INSERT_RESULT=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -A << EOF 2>&1
 INSERT INTO tenants (domain, name, status)
 VALUES ('${PRIMARY_DOMAIN}', '${DEFAULT_TENANT_NAME}', 'active')
-ON CONFLICT (domain) DO NOTHING;
+ON CONFLICT (domain) DO UPDATE SET name = EXCLUDED.name, status = EXCLUDED.status
+RETURNING id;
 EOF
+)
+
+    if [ $? -ne 0 ]; then
+        log_error "Failed to create default tenant"
+        echo "$TENANT_INSERT_RESULT" >> setup.log
+        exit 1
+    fi
+
+    echo "$TENANT_INSERT_RESULT" >> setup.log
+
+    # Verify tenant was created
+    TENANT_COUNT=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -A -c "SELECT COUNT(*) FROM tenants WHERE domain='${PRIMARY_DOMAIN}'" 2>/dev/null)
+    if [ "$TENANT_COUNT" -eq 1 ]; then
+        log_success "Default tenant created: ${DEFAULT_TENANT_NAME}"
+    else
+        log_error "Tenant verification failed"
+        exit 1
+    fi
 
     # Update system_meta with installation info
     log_info "Recording installation metadata..."
