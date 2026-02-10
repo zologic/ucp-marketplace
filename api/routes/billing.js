@@ -6,11 +6,26 @@
 
 const express = require('express');
 const router = express.Router();
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+// Only initialize Stripe if API key is provided
+const stripe = process.env.STRIPE_SECRET_KEY
+    ? require('stripe')(process.env.STRIPE_SECRET_KEY)
+    : null;
+
+// Middleware to check if Stripe is configured
+const requireStripe = (req, res, next) => {
+    if (!stripe) {
+        return res.status(503).json({
+            error: 'Stripe not configured',
+            message: 'Billing features require STRIPE_SECRET_KEY to be set'
+        });
+    }
+    next();
+};
 
 // POST /api/billing/create-customer
 // Called when merchant first installs UCPReady plugin OR when admin enables CPC billing
-router.post('/create-customer', async (req, res) => {
+router.post('/create-customer', requireStripe, async (req, res) => {
     try {
         const { merchant_id } = req.body;
 
@@ -80,7 +95,7 @@ router.post('/create-customer', async (req, res) => {
 
 // POST /api/billing/attach-payment-method
 // Called when merchant adds payment method via Stripe Elements
-router.post('/attach-payment-method', async (req, res) => {
+router.post('/attach-payment-method', requireStripe, async (req, res) => {
     try {
         const { merchant_id, payment_method_id } = req.body;
 
@@ -139,7 +154,7 @@ router.post('/attach-payment-method', async (req, res) => {
 
 // GET /api/billing/payment-methods/:merchant_id
 // Get merchant's payment methods for display in admin UI
-router.get('/payment-methods/:merchant_id', async (req, res) => {
+router.get('/payment-methods/:merchant_id', requireStripe, async (req, res) => {
     try {
         const { merchant_id } = req.params;
 
@@ -181,7 +196,7 @@ router.get('/payment-methods/:merchant_id', async (req, res) => {
 
 // DELETE /api/billing/payment-method/:payment_method_id
 // Remove payment method
-router.delete('/payment-method/:payment_method_id', async (req, res) => {
+router.delete('/payment-method/:payment_method_id', requireStripe, async (req, res) => {
     try {
         const { payment_method_id } = req.params;
 
