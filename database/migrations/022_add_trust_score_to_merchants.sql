@@ -11,9 +11,9 @@ CREATE INDEX idx_merchants_trust_score ON merchants(trust_score DESC);
 
 -- Index for merchant_daily_stats performance lookback queries
 -- Optimizes 90-day rolling window aggregation in search endpoint
+-- Note: No partial index filter (CURRENT_DATE not allowed in index predicate)
 CREATE INDEX IF NOT EXISTS idx_merchant_daily_stats_lookback
-ON merchant_daily_stats(merchant_id, date DESC)
-WHERE date >= CURRENT_DATE - INTERVAL '90 days';
+ON merchant_daily_stats(merchant_id, date DESC);
 
 -- Comments for documentation
 COMMENT ON COLUMN merchants.trust_score IS 'Pre-calculated trust score (0.0-1.0) updated daily at 04:00 UTC';
