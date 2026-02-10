@@ -9,16 +9,16 @@ RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY api/package*.json ./
 
 # Install production dependencies
 RUN npm ci --only=production
 
 # Copy application code
-COPY . .
+COPY api/ .
 
-# Copy database migrations from parent directory
-COPY --chown=nodejs:nodejs ../database /database
+# Copy database migrations
+COPY --chown=nodejs:nodejs database/ /database
 
 # Change ownership to non-root user
 RUN chown -R nodejs:nodejs /app
