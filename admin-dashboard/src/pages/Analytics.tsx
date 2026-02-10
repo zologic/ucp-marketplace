@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -18,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { TrendingUp, Search, MousePointerClick, ShoppingCart, DollarSign } from 'lucide-react';
+import { Search, MousePointerClick, ShoppingCart, DollarSign } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { Line, Bar } from 'react-chartjs-2';
 import {
