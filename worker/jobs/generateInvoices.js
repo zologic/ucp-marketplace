@@ -4,7 +4,9 @@
  * ENHANCED: Stripe integration for automated payment collection
  */
 
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const stripe = process.env.STRIPE_SECRET_KEY
+    ? require('stripe')(process.env.STRIPE_SECRET_KEY)
+    : null;
 
 async function generateInvoices(db) {
     const startTime = Date.now();
