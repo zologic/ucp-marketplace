@@ -1,7 +1,67 @@
 # Caddyfile for multi-domain white-label routing
 # Caddy automatically provisions SSL certificates via Let's Encrypt
 
-# Default catch-all for any domain (development)
+# Production configuration for bizform.app
+bizform.app {
+    # Enable automatic HTTPS
+    tls {
+        protocols tls1.2 tls1.3
+    }
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    # Enable compression
+    encode gzip zstd
+
+    # API routes
+    handle /api/* {
+        reverse_proxy api:3000
+    }
+
+    # Admin routes
+    handle /admin/* {
+        reverse_proxy api:3000
+    }
+
+    # Admin UI (development access)
+    handle /admin-ui/* {
+        uri strip_prefix /admin-ui
+        reverse_proxy admin:5173
+    }
+
+    # Health check endpoint
+    handle /health {
+        reverse_proxy api:3000
+    }
+
+    # Internal routes
+    handle /internal/* {
+        reverse_proxy api:3000
+    }
+
+    # Frontend (default)
+    handle {
+        reverse_proxy frontend:80
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10mb
+            roll_keep 10
+        }
+        level INFO
+    }
+}
+
+# Development fallback (localhost only)
 :80 {
     # Route /api/* requests to backend API
     handle /api/* {
