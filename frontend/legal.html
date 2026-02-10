@@ -3,244 +3,65 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terms of Service - UCPReady AI Commerce Directory</title>
-    <meta name="description" content="Terms of service for consumers, merchants, and white-label partners.">
+    <title>Terms of Service - UCPReady</title>
     <link rel="stylesheet" href="styles.css">
-    <style>
-        .policy-container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 60px 20px;
-        }
-        .policy-header {
-            text-align: center;
-            margin-bottom: 40px;
-        }
-        .policy-header h1 {
-            font-size: 2.5rem;
-            color: #1e293b;
-            margin-bottom: 12px;
-        }
-        .policy-header .last-updated {
-            color: #64748b;
-            font-size: 1rem;
-        }
-        .policy-section {
-            margin-bottom: 40px;
-        }
-        .policy-section h2 {
-            font-size: 1.75rem;
-            color: #1e293b;
-            margin-bottom: 16px;
-        }
-        .policy-section h3 {
-            font-size: 1.25rem;
-            color: #1e293b;
-            margin-top: 24px;
-            margin-bottom: 12px;
-        }
-        .policy-section p, .policy-section ul {
-            color: #64748b;
-            line-height: 1.8;
-            margin-bottom: 16px;
-        }
-        .policy-section ul {
-            padding-left: 24px;
-        }
-        .policy-section li {
-            margin-bottom: 8px;
-        }
-        .policy-section strong {
-            color: #1e293b;
-        }
-        .warning-box {
-            background: #fef2f2;
-            border-left: 4px solid #ef4444;
-            padding: 16px;
-            margin: 24px 0;
-            border-radius: 8px;
-        }
-        .warning-box strong {
-            color: #ef4444;
-        }
-        .contact-box {
-            background: #f8fafc;
-            padding: 24px;
-            border-radius: 12px;
-            border: 1px solid #e2e8f0;
-            margin-top: 40px;
-        }
-        .contact-box strong {
-            color: #2563eb;
-            font-size: 1.125rem;
-        }
-    </style>
 </head>
 <body>
-    <div class="policy-container">
-        <div class="policy-header">
+    <main class="container">
+        <section class="content-page">
             <h1>Terms of Service</h1>
-            <div class="last-updated">Last updated: February 10, 2026</div>
-        </div>
+            <p><em>Last updated: February 2026</em></p>
 
-        <div class="warning-box">
-            <strong>Legal Disclaimer:</strong> This is a template. Replace with actual legal review before production use.
-        </div>
+            <h2>1. Acceptance of Terms</h2>
+            <p>By using UCPReady, you agree to these terms. If you disagree with any part, please do not use our service.</p>
 
-        <div class="policy-section">
-            <h2>1. Introduction</h2>
-            <p><strong>Agreement:</strong> By using UCPReady, you agree to these terms.</p>
-            <p><strong>Who this applies to:</strong> Consumers searching products, merchants listing products, and white-label partners.</p>
-        </div>
+            <h2>2. Service Description</h2>
+            <p>UCPReady is a commerce discovery platform that connects shoppers with verified merchants. We facilitate product search and checkout but do not sell products directly.</p>
 
-        <div class="policy-section">
-            <h2>2. For Consumers</h2>
-
-            <h3>Service Description</h3>
+            <h2>3. User Responsibilities</h2>
+            <p>You agree to:</p>
             <ul>
-                <li>UCPReady is a product discovery service. We connect you with merchant stores but do NOT process payments or handle orders.</li>
-                <li>All purchases are made directly with merchants. UCPReady is NOT a party to the transaction.</li>
+                <li>Use the service legally and ethically</li>
+                <li>Not attempt to circumvent security measures</li>
+                <li>Not scrape or harvest data without permission</li>
+                <li>Respect intellectual property rights</li>
             </ul>
 
-            <h3>No Accounts</h3>
+            <h2>4. Merchant Relationships</h2>
+            <p>Transactions occur directly between you and merchants. UCPReady is not responsible for:</p>
             <ul>
-                <li>You do NOT need an account to search products</li>
-                <li>We do NOT store your personal information</li>
+                <li>Product quality or fulfillment</li>
+                <li>Merchant disputes or refunds</li>
+                <li>Merchant terms and conditions</li>
             </ul>
 
-            <h3>Merchant Responsibility</h3>
-            <ul>
-                <li>Merchants are solely responsible for product listings, pricing, fulfillment, and customer service</li>
-                <li>UCPReady does NOT guarantee product availability, pricing accuracy, or merchant performance</li>
-            </ul>
-
-            <h3>Disputes</h3>
-            <ul>
-                <li>Any disputes about orders must be resolved directly with the merchant</li>
-                <li>We provide merchant contact information for support</li>
-            </ul>
-        </div>
-
-        <div class="policy-section">
-            <h2>3. For Merchants</h2>
-
-            <h3>Eligibility</h3>
-            <ul>
-                <li>Must operate a legitimate WooCommerce store</li>
-                <li>Must have legal right to sell products in your jurisdiction</li>
-                <li>Must install UCPReady WooCommerce plugin and comply with UCP protocol</li>
-            </ul>
-
-            <h3>Listing Requirements</h3>
-            <ul>
-                <li>Accurate product information (title, description, price, availability)</li>
-                <li>No prohibited items (illegal goods, counterfeit products, dangerous items)</li>
-                <li>No misleading pricing or bait-and-switch tactics</li>
-            </ul>
-
-            <h3>Billing Terms</h3>
-            <ul>
-                <li><strong>Commission:</strong> You agree to pay default 10% commission on completed orders attributed to UCPReady</li>
-                <li><strong>CPC (if applicable):</strong> You agree to pay per-click fees for premium visibility</li>
-                <li><strong>Invoicing:</strong> Invoices generated monthly, payment due within 30 days</li>
-                <li><strong>Non-payment:</strong> Failure to pay may result in suspension or removal from directory</li>
-            </ul>
-
-            <h3>Attribution</h3>
-            <ul>
-                <li>Orders are attributed using UCP order completion webhooks with Ed25519 signature verification</li>
-                <li>You agree to send webhooks for all orders completed via UCPReady checkout sessions</li>
-            </ul>
-
-            <h3>Merchant Obligations</h3>
-            <ul>
-                <li>Fulfill orders promptly and accurately</li>
-                <li>Provide customer support for your orders</li>
-                <li>Maintain UCP protocol compliance (keep plugin updated)</li>
-                <li>Do NOT manipulate rankings or engage in click fraud</li>
-            </ul>
-
-            <h3>Suspension/Termination</h3>
-            <ul>
-                <li>We reserve the right to suspend or remove merchants for violations of these terms</li>
-                <li>Reasons include: non-payment, fraudulent activity, poor customer experience, policy violations</li>
-            </ul>
-        </div>
-
-        <div class="policy-section">
-            <h2>4. For White-Label Partners</h2>
-
-            <h3>Partnership Terms</h3>
-            <ul>
-                <li><strong>Revenue share:</strong> You earn agreed % of commission revenue generated in your tenant network</li>
-                <li><strong>Brand usage:</strong> You may use UCPReady infrastructure under your own brand on your domain</li>
-                <li><strong>Merchant responsibility:</strong> You are responsible for onboarding and managing your merchant relationships</li>
-            </ul>
-
-            <h3>Technical Requirements</h3>
-            <ul>
-                <li><strong>Domain:</strong> You must provide a domain for your white-label instance</li>
-                <li><strong>SSL:</strong> HTTPS required (handled automatically via Let's Encrypt)</li>
-            </ul>
-
-            <h3>Termination</h3>
-            <ul>
-                <li>Either party may terminate partnership with 30 days notice</li>
-                <li>Upon termination, your tenant data can be exported or deleted per your request</li>
-            </ul>
-        </div>
-
-        <div class="policy-section">
             <h2>5. Limitation of Liability</h2>
+            <p>UCPReady provides the service "as is" without warranties. We are not liable for indirect, incidental, or consequential damages.</p>
 
-            <h3>Disclaimer</h3>
-            <ul>
-                <li>UCPReady provided "as is" without warranties of any kind</li>
-                <li>We do NOT guarantee uptime, data accuracy, or merchant reliability</li>
-            </ul>
-
-            <h3>Liability Cap</h3>
-            <ul>
-                <li>Our liability is limited to the amount you paid us in the last 12 months</li>
-                <li>We are NOT liable for indirect damages, lost profits, or consequential damages</li>
-            </ul>
-        </div>
-
-        <div class="policy-section">
             <h2>6. Intellectual Property</h2>
-            <ul>
-                <li>UCPReady and our technology are our property</li>
-                <li>Merchants retain ownership of their product data</li>
-                <li>White-label partners may use our infrastructure but do not acquire ownership</li>
-            </ul>
-        </div>
+            <p>All content and technology on UCPReady is owned by us or licensed to us. You may not copy, modify, or distribute our intellectual property.</p>
 
-        <div class="policy-section">
             <h2>7. Changes to Terms</h2>
-            <p>We may update these terms from time to time. Continued use constitutes acceptance of updated terms.</p>
-        </div>
+            <p>We may update these terms at any time. Continued use of the service constitutes acceptance of updated terms.</p>
 
-        <div class="policy-section">
             <h2>8. Governing Law</h2>
-            <p><strong>[Your jurisdiction, e.g., "Governed by the laws of Ireland"]</strong></p>
-            <p>Note: Update this section with your actual jurisdiction before production use.</p>
-        </div>
+            <p>These terms are governed by the laws of the Netherlands. Disputes will be resolved in Dutch courts.</p>
 
-        <div class="contact-box">
-            <strong>Questions about terms?</strong>
-            <p style="margin-top: 8px;">Email: <a href="mailto:legal@ucpready.com">legal@ucpready.com</a></p>
-        </div>
-    </div>
+            <h2>Contact</h2>
+            <p>For legal inquiries: <a href="mailto:legal@ucpready.io">legal@ucpready.io</a></p>
 
-    <!-- Footer -->
+            <a href="/" class="button">Back to Search</a>
+        </section>
+    </main>
+
     <footer class="footer">
-        <a href="/merchants">For merchants</a>
+        <a href="/merchants.html">For merchants</a>
         <span class="separator">•</span>
-        <a href="/partners">Partner / White-label</a>
+        <a href="/partners.html">Partner / White-label</a>
         <span class="separator">•</span>
-        <a href="/privacy">Privacy</a>
+        <a href="/privacy.html">Privacy</a>
         <span class="separator">•</span>
-        <a href="/legal">Legal</a>
+        <a href="/legal.html">Legal</a>
     </footer>
 </body>
 </html>

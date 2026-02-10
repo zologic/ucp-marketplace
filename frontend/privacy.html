@@ -3,186 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Privacy Policy - UCPReady AI Commerce Directory</title>
-    <meta name="description" content="Privacy policy explaining how we collect, use, and protect your data.">
+    <title>Privacy Policy - UCPReady</title>
     <link rel="stylesheet" href="styles.css">
-    <style>
-        .policy-container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 60px 20px;
-        }
-        .policy-header {
-            text-align: center;
-            margin-bottom: 40px;
-        }
-        .policy-header h1 {
-            font-size: 2.5rem;
-            color: #1e293b;
-            margin-bottom: 12px;
-        }
-        .policy-header .last-updated {
-            color: #64748b;
-            font-size: 1rem;
-        }
-        .policy-section {
-            margin-bottom: 40px;
-        }
-        .policy-section h2 {
-            font-size: 1.75rem;
-            color: #1e293b;
-            margin-bottom: 16px;
-        }
-        .policy-section h3 {
-            font-size: 1.25rem;
-            color: #1e293b;
-            margin-top: 24px;
-            margin-bottom: 12px;
-        }
-        .policy-section p, .policy-section ul {
-            color: #64748b;
-            line-height: 1.8;
-            margin-bottom: 16px;
-        }
-        .policy-section ul {
-            padding-left: 24px;
-        }
-        .policy-section li {
-            margin-bottom: 8px;
-        }
-        .policy-section strong {
-            color: #1e293b;
-        }
-        .contact-box {
-            background: #f8fafc;
-            padding: 24px;
-            border-radius: 12px;
-            border: 1px solid #e2e8f0;
-            margin-top: 40px;
-        }
-        .contact-box strong {
-            color: #2563eb;
-            font-size: 1.125rem;
-        }
-    </style>
 </head>
 <body>
-    <div class="policy-container">
-        <div class="policy-header">
+    <main class="container">
+        <section class="content-page">
             <h1>Privacy Policy</h1>
-            <div class="last-updated">Last updated: February 10, 2026</div>
-        </div>
+            <p><em>Last updated: February 2026</em></p>
 
-        <div class="policy-section">
-            <h2>Introduction</h2>
-            <p><strong>Who we are:</strong> UCPReady operates an AI shopping directory connecting consumers with merchants via the Universal Commerce Protocol (UCP).</p>
-            <p><strong>What this policy covers:</strong> This privacy policy explains how we collect, use, and protect your data when you use our platform.</p>
-            <p><strong>Contact:</strong> For privacy questions, email us at <a href="mailto:privacy@ucpready.com">privacy@ucpready.com</a></p>
-        </div>
-
-        <div class="policy-section">
-            <h2>Data We Collect</h2>
-
-            <h3>1. Consumer Data (Minimal Collection)</h3>
+            <h2>Information We Collect</h2>
+            <p>When you use UCPReady, we collect:</p>
             <ul>
-                <li><strong>Search queries:</strong> Stored as SHA-256 hash, NOT plaintext. We cannot read your actual search terms.</li>
-                <li><strong>Click events:</strong> Merchant clicked, timestamp, temporary session ID (5-minute lifetime)</li>
-                <li><strong>No personal information:</strong> We do NOT collect your name, email, address, or payment information</li>
-                <li><strong>Sessions:</strong> Temporary session IDs prevent duplicate click counting. Expire after 5 minutes.</li>
+                <li><strong>Search queries:</strong> The products you search for</li>
+                <li><strong>Click data:</strong> Products you view</li>
+                <li><strong>Device information:</strong> Browser type, IP address, device identifiers</li>
             </ul>
 
-            <h3>2. Merchant Data</h3>
+            <h2>How We Use Your Information</h2>
             <ul>
-                <li>Domain, business name, contact email</li>
-                <li>Product catalog (synced from your WooCommerce store)</li>
-                <li>Order webhooks (order ID, amount, status - for attribution only)</li>
-                <li>Ed25519 public key (for webhook verification)</li>
+                <li>Provide and improve search results</li>
+                <li>Analyze platform performance</li>
+                <li>Prevent fraud and abuse</li>
+                <li>Comply with legal obligations</li>
             </ul>
 
-            <h3>3. Admin Data</h3>
+            <h2>Information Sharing</h2>
+            <p>We share minimal information with:</p>
             <ul>
-                <li>Admin user accounts (email, hashed password, login timestamps)</li>
-                <li>Audit logs (admin actions for security purposes)</li>
+                <li><strong>Merchants:</strong> When you click through to their stores (anonymized)</li>
+                <li><strong>Payment processors:</strong> When you complete a purchase</li>
+                <li><strong>Service providers:</strong> Infrastructure and analytics partners</li>
             </ul>
-        </div>
 
-        <div class="policy-section">
-            <h2>How We Use Your Data</h2>
+            <h2>Your Rights</h2>
+            <p>You have the right to:</p>
             <ul>
-                <li><strong>Search intent analysis:</strong> Improve product discovery and merchant matching</li>
-                <li><strong>Attribution:</strong> Track which merchants led to sales (for billing purposes only)</li>
-                <li><strong>Analytics:</strong> Aggregate statistics for marketplace health monitoring</li>
-                <li><strong>Security:</strong> Fraud prevention and system security</li>
+                <li>Access your personal data</li>
+                <li>Request deletion of your data</li>
+                <li>Opt out of analytics tracking</li>
+                <li>Lodge a complaint with supervisory authorities</li>
             </ul>
-        </div>
 
-        <div class="policy-section">
-            <h2>Data Sharing</h2>
-            <ul>
-                <li><strong>We do NOT sell your data</strong></li>
-                <li><strong>Merchant attribution:</strong> Merchants receive order attribution data (which searches led to sales) but NOT consumer identities</li>
-                <li><strong>Third parties:</strong> We use Stripe for payment processing (merchants only). See Stripe's privacy policy.</li>
-                <li><strong>Legal requirements:</strong> We may disclose data if required by law</li>
-            </ul>
-        </div>
-
-        <div class="policy-section">
             <h2>Data Retention</h2>
-            <ul>
-                <li><strong>Search events:</strong> 90 days (then aggregated/anonymized)</li>
-                <li><strong>Order attribution:</strong> 2 years (for billing disputes)</li>
-                <li><strong>Merchant data:</strong> Until merchant account closed</li>
-                <li><strong>Admin audit logs:</strong> 1 year</li>
-            </ul>
-        </div>
+            <p>We retain search and click data for 90 days for analytics purposes. Order data is retained for 7 years for accounting and legal compliance.</p>
 
-        <div class="policy-section">
-            <h2>Your Rights (GDPR)</h2>
-            <ul>
-                <li><strong>Right to access:</strong> Request a copy of your data</li>
-                <li><strong>Right to deletion:</strong> Request deletion of your data (with limitations for billing records)</li>
-                <li><strong>Right to rectification:</strong> Correct inaccurate data</li>
-                <li><strong>Contact us:</strong> <a href="mailto:privacy@ucpready.com">privacy@ucpready.com</a></li>
-            </ul>
-        </div>
+            <h2>Contact</h2>
+            <p>For privacy questions or data requests, contact: <a href="mailto:privacy@ucpready.io">privacy@ucpready.io</a></p>
 
-        <div class="policy-section">
-            <h2>Cookies</h2>
-            <ul>
-                <li><strong>Essential cookies only:</strong> Session management for admin dashboard</li>
-                <li><strong>No tracking cookies:</strong> We do NOT use third-party tracking or advertising cookies on the consumer frontend</li>
-            </ul>
-        </div>
+            <a href="/" class="button">Back to Search</a>
+        </section>
+    </main>
 
-        <div class="policy-section">
-            <h2>Security</h2>
-            <ul>
-                <li><strong>Encryption:</strong> All data encrypted in transit (TLS) and at rest</li>
-                <li><strong>Access control:</strong> Admin access requires authentication and is logged</li>
-                <li><strong>Regular audits:</strong> We conduct regular security audits</li>
-            </ul>
-        </div>
-
-        <div class="policy-section">
-            <h2>Changes to This Policy</h2>
-            <p>We may update this policy from time to time. Check this page for changes. Last updated: February 10, 2026</p>
-        </div>
-
-        <div class="contact-box">
-            <strong>Questions about privacy?</strong>
-            <p style="margin-top: 8px;">Email: <a href="mailto:privacy@ucpready.com">privacy@ucpready.com</a></p>
-        </div>
-    </div>
-
-    <!-- Footer -->
     <footer class="footer">
-        <a href="/merchants">For merchants</a>
+        <a href="/merchants.html">For merchants</a>
         <span class="separator">•</span>
-        <a href="/partners">Partner / White-label</a>
+        <a href="/partners.html">Partner / White-label</a>
         <span class="separator">•</span>
-        <a href="/privacy">Privacy</a>
+        <a href="/privacy.html">Privacy</a>
         <span class="separator">•</span>
-        <a href="/legal">Legal</a>
+        <a href="/legal.html">Legal</a>
     </footer>
 </body>
 </html>
