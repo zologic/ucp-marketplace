@@ -352,6 +352,120 @@ async function verifyMerchantUCP(merchantId, db) {
     }
 }
 
+// PATCH /admin/merchants/:id/cpc - Toggle CPC billing
+router.patch('/merchants/:id/cpc', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { enabled, rate } = req.body;
+        const adminId = req.admin.id;
+        const adminEmail = req.admin.email;
+
+        // Validation
+        if (typeof enabled !== 'boolean') {
+            return res.status(400).json({
+                error: 'enabled must be a boolean'
+            });
+        }
+
+        if (enabled && (rate == null || rate <= 0)) {
+            return res.status(400).json({
+                error: 'rate must be positive when enabling CPC billing'
+            });
+        }
+
+        // Fetch merchant
+        const merchantResult = await req.app.locals.db.query(`
+            SELECT id, domain, cpc_billing_enabled, cpc_enabled_at, cpc_rate
+            FROM merchants
+            WHERE id = $1
+        `, [id]);
+
+        if (merchantResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Merchant not found' });
+        }
+
+        const merchant = merchantResult.rows[0];
+
+        // Update CPC billing status
+        let updateQuery;
+        let updateParams;
+
+        if (enabled) {
+            // Enable CPC billing (reset cpc_enabled_at for non-retroactive billing)
+            updateQuery = `
+                UPDATE merchants
+                SET
+                    cpc_billing_enabled = TRUE,
+                    cpc_enabled_at = NOW(),
+                    cpc_rate = $2,
+                    updated_at = NOW()
+                WHERE id = $1
+                RETURNING cpc_billing_enabled, cpc_enabled_at, cpc_rate
+            `;
+            updateParams = [id, rate];
+        } else {
+            // Disable CPC billing (keep cpc_enabled_at for audit trail)
+            updateQuery = `
+                UPDATE merchants
+                SET
+                    cpc_billing_enabled = FALSE,
+                    updated_at = NOW()
+                WHERE id = $1
+                RETURNING cpc_billing_enabled, cpc_enabled_at, cpc_rate
+            `;
+            updateParams = [id];
+        }
+
+        const result = await req.app.locals.db.query(updateQuery, updateParams);
+        const updated = result.rows[0];
+
+        // Audit log
+        console.log(`[CPC Billing] Admin ${adminEmail} (${adminId}) ${enabled ? 'ENABLED' : 'DISABLED'} CPC billing for merchant ${merchant.domain} (${id})${enabled ? ` at rate ${rate}` : ''}`);
+
+        // Store audit record (if audit_logs table exists)
+        try {
+            await req.app.locals.db.query(`
+                INSERT INTO audit_logs (admin_id, action, resource_type, resource_id, details, created_at)
+                VALUES ($1, $2, $3, $4, $5, NOW())
+            `, [
+                adminId,
+                enabled ? 'cpc_billing_enabled' : 'cpc_billing_disabled',
+                'merchant',
+                id,
+                JSON.stringify({
+                    domain: merchant.domain,
+                    rate: enabled ? rate : null,
+                    previous_enabled: merchant.cpc_billing_enabled,
+                    previous_rate: merchant.cpc_rate
+                })
+            ]);
+        } catch (auditError) {
+            // Audit table might not exist yet - log to console
+            console.warn('[CPC Billing] Audit log insert failed:', auditError.message);
+        }
+
+        res.json({
+            success: true,
+            merchant_id: id,
+            domain: merchant.domain,
+            cpc_billing: {
+                enabled: updated.cpc_billing_enabled,
+                enabled_at: updated.cpc_enabled_at,
+                rate: updated.cpc_rate
+            },
+            message: enabled
+                ? `CPC billing enabled at ${rate} per click. Only clicks after ${updated.cpc_enabled_at} will be billed.`
+                : 'CPC billing disabled. Tracking continues but billing stopped.'
+        });
+
+    } catch (error) {
+        console.error('[CPC Billing] Error:', error);
+        res.status(500).json({
+            error: 'Failed to update CPC billing settings'
+        });
+    }
+});
+
 // Helper: Trigger MCP reload
 async function triggerMCPReload() {
     const mcpUrl = process.env.MCP_URL || 'http://mcp-server:8080';
