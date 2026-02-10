@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "migrate": "node ../database/migrate.js"
+    "migrate": "node migrate.js"
   },
   "keywords": ["ucp", "commerce", "api"],
   "author": "",
