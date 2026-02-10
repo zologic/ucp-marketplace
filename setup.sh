@@ -229,8 +229,9 @@ collect_configuration() {
     read -p "Postgres database name [ucpready]: " POSTGRES_DB
     POSTGRES_DB=${POSTGRES_DB:-ucpready}
 
-    read -p "Postgres username [postgres]: " POSTGRES_USER
-    POSTGRES_USER=${POSTGRES_USER:-postgres}
+    # Always use 'postgres' as the username (hardcoded in docker-compose.yml)
+    POSTGRES_USER=postgres
+    log_info "Using default postgres user (hardcoded in docker-compose.yml)"
 
     while true; do
         read -s -p "Postgres password (min 8 characters): " POSTGRES_PASSWORD
@@ -298,7 +299,7 @@ collect_configuration() {
     log_info "Configuration Summary:"
     echo "  Domain: $PRIMARY_DOMAIN"
     echo "  Admin Email: $ADMIN_EMAIL"
-    echo "  Database: $POSTGRES_DB (user: $POSTGRES_USER)"
+    echo "  Database: $POSTGRES_DB (user: postgres)"
     echo "  Tenant: $DEFAULT_TENANT_NAME (revenue split: ${DEFAULT_TENANT_REVENUE_PERCENT}%)"
     echo "  Stripe: $([ -n "$STRIPE_SECRET_KEY" ] && echo "Configured" || echo "Skipped")"
     echo ""
@@ -323,7 +324,7 @@ generate_env_file() {
 # =============================================================================
 # Database Configuration
 # =============================================================================
-DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 
 # =============================================================================
