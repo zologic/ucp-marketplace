@@ -3,11 +3,12 @@ FROM nginx:alpine
 # Copy static files
 COPY *.html /usr/share/nginx/html/
 
-# Create nginx config
+# Create nginx config for /admin-ui/ base path
 RUN echo 'server { \
     listen 80; \
     root /usr/share/nginx/html; \
     index index.html; \
+    \
     location / { \
         try_files $uri $uri/ /index.html; \
     } \
