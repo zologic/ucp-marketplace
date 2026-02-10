@@ -9,6 +9,9 @@ const axios = require('axios');
 const crypto = require('crypto');
 const { rankProducts, getCategoryWeights } = require('../services/ranking');
 
+// Import onboarding routes
+const onboardRoutes = require('./onboard');
+
 // POST /api/search - Search products across active merchants
 router.post('/search', async (req, res) => {
     try {
@@ -273,5 +276,8 @@ function hashIntent(intent) {
     const normalized = `${intent.category || ''}|${intent.brand || ''}|${intent.max_price_cents || ''}|${intent.currency || ''}`;
     return crypto.createHash('sha256').update(normalized).digest('hex');
 }
+
+// Mount onboarding routes
+router.use('/', onboardRoutes);
 
 module.exports = router;
