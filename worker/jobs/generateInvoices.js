@@ -45,15 +45,35 @@ async function generateInvoices(db) {
 
                 const billing = billingResult.rows[0];
 
+                // Get merchant CPC billing settings
+                const merchantResult = await db.query(
+                    'SELECT cpc_billing_enabled, cpc_enabled_at, cpc_rate FROM merchants WHERE id = $1',
+                    [merchant_id]
+                );
+                const merchant = merchantResult.rows[0];
+
                 // Aggregate billable events
+                // CRITICAL: Exclude CPC events if CPC billing is disabled
+                // CRITICAL: Only include CPC events after cpc_enabled_at (non-retroactive)
                 const eventsResult = await db.query(`
                     SELECT event_type, COUNT(*) as count, SUM(amount_cents) as total
                     FROM billable_events
                     WHERE merchant_id = $1
                       AND invoiced = false
                       AND DATE(occurred_at) BETWEEN $2 AND $3
+                      AND (
+                        -- Include all non-CPC events
+                        event_type != 'click'
+                        OR
+                        -- Include CPC events only if enabled AND after enablement date
+                        (
+                          event_type = 'click'
+                          AND $4 = true
+                          AND occurred_at >= $5
+                        )
+                      )
                     GROUP BY event_type
-                `, [merchant_id, periodStartStr, periodEndStr]);
+                `, [merchant_id, periodStartStr, periodEndStr, merchant.cpc_billing_enabled, merchant.cpc_enabled_at]);
 
                 const events = eventsResult.rows;
 
@@ -121,13 +141,25 @@ async function generateInvoices(db) {
                 }
 
                 // Mark billable events as invoiced
+                // CRITICAL: Only mark events that were actually included in the invoice
                 await db.query(`
                     UPDATE billable_events
                     SET invoiced = true
                     WHERE merchant_id = $1
                       AND invoiced = false
                       AND DATE(occurred_at) BETWEEN $2 AND $3
-                `, [merchant_id, periodStartStr, periodEndStr]);
+                      AND (
+                        -- Mark all non-CPC events
+                        event_type != 'click'
+                        OR
+                        -- Mark CPC events only if they were billed
+                        (
+                          event_type = 'click'
+                          AND $4 = true
+                          AND occurred_at >= $5
+                        )
+                      )
+                `, [merchant_id, periodStartStr, periodEndStr, merchant.cpc_billing_enabled, merchant.cpc_enabled_at]);
 
                 invoicesCreated++;
                 console.log(`[generateInvoices] ✓ Created invoice ${invoiceNumber}: ${(totalCents / 100).toFixed(2)} ${billing.currency}`);

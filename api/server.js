@@ -11,6 +11,7 @@ const publicRoutes = require('./routes/public');
 const adminRoutes = require('./routes/admin');
 const webhookRoutes = require('./routes/webhooks');
 const internalRoutes = require('./routes/internal');
+const seoRoutes = require('./routes/seo');
 
 // Import middleware
 const { resolveTenant } = require('./middleware/tenant');
@@ -71,6 +72,9 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// SEO routes (tenant-aware, served at root level)
+app.use('/', resolveTenant, seoRoutes);
 
 // Public API routes (tenant-aware)
 app.use('/api', resolveTenant, publicRoutes);

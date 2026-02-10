@@ -7,6 +7,10 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const crypto = require('crypto');
+const { rankProducts, getCategoryWeights } = require('../services/ranking');
+
+// Import onboarding routes
+const onboardRoutes = require('./onboard');
 
 // POST /api/search - Search products across active merchants
 router.post('/search', async (req, res) => {
@@ -75,13 +79,27 @@ router.post('/search', async (req, res) => {
             paramIndex++;
         }
 
-        searchQuery += ` AND p.stock_status = 'in_stock' ORDER BY p.indexed_at DESC LIMIT 20`;
+        // Don't hard-filter stock_status here - let ranking handle it
+        // Fetch more results for ranking (50 instead of 20)
+        searchQuery += ` LIMIT 50`;
 
         const productsResult = await req.app.locals.db.query(searchQuery, queryParams);
 
+        // Apply production-grade ranking
+        const categoryWeights = getCategoryWeights(intent.category);
+        const rankedProducts = await rankProducts(
+            productsResult.rows,
+            intent,
+            req.app.locals.db,
+            categoryWeights
+        );
+
+        // Take top 20 after ranking
+        const topResults = rankedProducts.slice(0, 20);
+
         // Log search events for each product returned
         const intentHash = hashIntent(intent);
-        for (const product of productsResult.rows) {
+        for (const product of topResults) {
             await req.app.locals.db.query(`
                 INSERT INTO search_events (tenant_id, merchant_id, product_id, intent_hash, category, brand, max_price_cents, currency)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -89,7 +107,7 @@ router.post('/search', async (req, res) => {
         }
 
         res.json({
-            results: productsResult.rows.map(p => ({
+            results: topResults.map(p => ({
                 id: p.id,
                 merchant_id: p.merchant_id,
                 merchant_name: p.merchant_name,
@@ -99,7 +117,7 @@ router.post('/search', async (req, res) => {
                 image_url: p.image_url,
                 stock_status: p.stock_status
             })),
-            count: productsResult.rows.length
+            count: topResults.length
         });
     } catch (error) {
         console.error('Search error:', error);
@@ -258,5 +276,8 @@ function hashIntent(intent) {
     const normalized = `${intent.category || ''}|${intent.brand || ''}|${intent.max_price_cents || ''}|${intent.currency || ''}`;
     return crypto.createHash('sha256').update(normalized).digest('hex');
 }
+
+// Mount onboarding routes
+router.use('/', onboardRoutes);
 
 module.exports = router;
