@@ -31,70 +31,287 @@ A production-ready, white-label AI shopping marketplace that connects AI agents 
 - **Protocol:** UCP (Universal Commerce Protocol)
 - **Crypto:** Ed25519 signatures for attribution
 
-## Quick Start
+## 🚀 Installation (5-Minute Setup)
+
+### One-Command Production Install
+
+Install the entire UCPReady AI Commerce Directory platform on a fresh Linux server with a single command:
+
+```bash
+git clone https://github.com/your-org/ucp-marketplace.git
+cd ucp-marketplace
+chmod +x setup.sh
+./setup.sh
+```
+
+The interactive installer will:
+- ✅ Prompt for all required configuration (domain, credentials, etc.)
+- ✅ Generate secure secrets and keys automatically
+- ✅ Configure automatic HTTPS with Let's Encrypt
+- ✅ Initialize the database with all migrations
+- ✅ Create your admin account and default tenant
+- ✅ Start all Docker services
+- ✅ Verify system health
+
+**Time:** 5-10 minutes
+**Expertise Required:** Basic Linux command line
+**Manual Steps:** Zero
 
 ### Prerequisites
 
-- Docker and Docker Compose
-- 2GB RAM minimum
-- Ports 80 and 443 available
+- Fresh Linux VPS (Ubuntu 22.04+ or Debian 11+ recommended)
+- Docker 24.0+ and Docker Compose V2
+- Domain name pointed to your server's IP address
+- Ports 80 and 443 open in firewall
+- Minimum 2GB RAM, 20GB disk space
 
-### Installation
+### Installing Docker
+
+If you don't have Docker installed:
 
 ```bash
-# Clone repository
-git clone https://github.com/your-org/ucp-marketplace.git
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+### What Gets Installed
+
+The setup script deploys these services:
+
+| Service    | Purpose                                      | Port       |
+|------------|----------------------------------------------|------------|
+| Caddy      | Reverse proxy + automatic SSL                | 80, 443    |
+| Frontend   | Consumer search + chat UI                     | Internal   |
+| API        | REST API (search, admin, billing)            | Internal   |
+| MCP Server | AI orchestration middleware                   | Internal   |
+| Worker     | Background jobs (billing, indexing, etc.)    | Internal   |
+| PostgreSQL | Primary database                              | Internal   |
+| Redis      | Rate limiting + caching                       | Internal   |
+
+All services run in isolated Docker networks. Only Caddy is exposed publicly.
+
+### After Installation
+
+Once setup.sh completes, your marketplace is live at your domain with HTTPS. You'll see output like this:
+
+```
+╔════════════════════════════════════════════════════════════════╗
+║  UCPReady AI Commerce Directory - Installation Complete!       ║
+╚════════════════════════════════════════════════════════════════╝
+
+🌐 Your marketplace is live at:
+   https://search.example.com
+
+🔐 Admin Credentials:
+   Email: admin@example.com
+   Password: Xy9k2!mP... (save this now!)
+
+📊 Admin Dashboard:
+   https://search.example.com/admin/login
+```
+
+**Next Steps:**
+1. Log in to the admin dashboard
+2. Onboard your first merchant at `/admin/merchants`
+3. Configure MCP tools for AI orchestration
+4. Test search functionality at the homepage
+
+## 🔄 Upgrading
+
+To upgrade to the latest version:
+
+```bash
 cd ucp-marketplace
+git pull
+./upgrade.sh
+```
 
-# Copy environment template
-cp .env.example .env
+The upgrade script will:
+- ✅ Check system prerequisites
+- ✅ Run database migrations
+- ✅ Rebuild and restart services with minimal downtime (~10-20s)
+- ✅ Verify system health
+- ✅ Provide rollback instructions if anything fails
 
-# Generate platform keys
-openssl genpkey -algorithm ED25519 -out secrets/platform_private_key.pem
-openssl pkey -in secrets/platform_private_key.pem -pubout -out secrets/platform_public_key.pem
+**Upgrade Safety:**
+- Database migrations are forward-only and transactional
+- Services restart in a safe order (worker → mcp → api → frontend → caddy)
+- Postgres and Redis never stop (zero data loss)
+- Automatic rollback to previous container images if health checks fail
+- Full upgrade log saved to `upgrade.log`
 
-# Build and start services
-docker-compose build
-docker-compose up -d
+### Upgrade Checklist
 
-# Check status
-docker-compose ps
+Before running `./upgrade.sh`:
+- [ ] Backup your database (recommended)
+- [ ] Review CHANGELOG for breaking changes
+- [ ] Notify users of brief maintenance window (if applicable)
+- [ ] Ensure disk space available (check with `df -h`)
+
+### Rollback
+
+If an upgrade fails, rollback with:
+
+```bash
+docker compose up -d --force-recreate
+```
+
+This reverts containers to their previous state. Database migrations are NOT rolled back automatically.
+
+## 📋 System Requirements
+
+**Minimum (Testing/Small deployments):**
+- 2 CPU cores
+- 2GB RAM
+- 20GB disk space
+- Ubuntu 22.04 or Debian 11
+
+**Recommended (Production):**
+- 4+ CPU cores
+- 8GB+ RAM
+- 100GB+ SSD disk space
+- Ubuntu 22.04 LTS
+- Separate backup storage
+
+**Network:**
+- Static IP address
+- Domain name with DNS configured
+- Firewall allowing ports 80 (HTTP) and 443 (HTTPS)
+
+## 🛠️ Manual Configuration (Advanced)
+
+If you need to configure manually without `setup.sh`, see [DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed step-by-step instructions.
+
+## 🏗️ Architecture Overview
+
+```
+                                    ┌─────────────┐
+                                    │   Internet  │
+                                    └──────┬──────┘
+                                           │ :80/:443
+                                           ▼
+                              ┌────────────────────────┐
+                              │   Caddy (SSL + Proxy)  │
+                              └─────────┬──────────────┘
+                                        │
+                    ┌───────────────────┼───────────────────┐
+                    │                   │                   │
+                    ▼                   ▼                   ▼
+             ┌──────────┐        ┌──────────┐       ┌──────────┐
+             │ Frontend │        │   API    │       │   MCP    │
+             │ (Nginx)  │        │ (Node.js)│       │ (Node.js)│
+             └──────────┘        └────┬─────┘       └────┬─────┘
+                                      │                   │
+                                      └─────────┬─────────┘
+                                                │
+                          ┌─────────────────────┼─────────────┐
+                          │                     │             │
+                          ▼                     ▼             ▼
+                   ┌──────────┐         ┌──────────┐   ┌─────────┐
+                   │ Postgres │         │  Redis   │   │ Worker  │
+                   │   (DB)   │         │ (Cache)  │   │ (Cron)  │
+                   └──────────┘         └──────────┘   └─────────┘
+```
+
+**Network Isolation:**
+- `public` network: Caddy ↔ Frontend, API
+- `internal` network: API ↔ Postgres, Redis, MCP, Worker
+- MCP not publicly accessible (internal-only)
+
+## 🔒 Security Considerations
+
+The setup script implements these security measures:
+
+- ✅ All secrets generated with cryptographically secure random (openssl)
+- ✅ .env file permissions set to 600 (owner read/write only)
+- ✅ Private keys stored in secrets/ with 600 permissions
+- ✅ Admin passwords hashed with bcrypt (10 rounds)
+- ✅ Services run as non-root users in containers
+- ✅ Security headers enabled (HSTS, CSP, X-Frame-Options)
+- ✅ Automatic HTTPS with Let's Encrypt
+- ✅ Internal services not exposed to internet
+- ✅ Rate limiting enabled on API endpoints
+
+**Additional Hardening (Recommended):**
+- Set up firewall (ufw/iptables) to allow only 80/443 + SSH
+- Configure fail2ban for SSH brute-force protection
+- Regular security updates: `apt update && apt upgrade`
+- Database backups to separate storage
+- Monitor logs for suspicious activity
+
+## 📊 Monitoring & Health Checks
+
+**Check system status:**
+```bash
+# All services
+docker compose ps
+
+# Service logs
+docker compose logs -f api
+docker compose logs -f worker
+
+# Health endpoints
+curl https://your-domain.com/health
+```
+
+**Database connection:**
+```bash
+docker compose exec postgres psql -U postgres -d ucpready
+```
+
+**Redis connection:**
+```bash
+docker compose exec redis redis-cli ping
+```
+
+## 🐛 Troubleshooting
+
+**Setup failed during installation:**
+1. Check `setup.log` for error details
+2. Verify Docker is running: `docker info`
+3. Check DNS: `dig your-domain.com` should point to your server IP
+4. Verify ports 80/443 are not in use: `ss -tulpn | grep -E ':80|:443'`
+5. Re-run setup.sh (it's idempotent)
+
+**Services won't start:**
+```bash
+# Check which service failed
+docker compose ps
 
 # View logs
-docker-compose logs -f
+docker compose logs <service-name>
+
+# Restart specific service
+docker compose restart <service-name>
 ```
 
-### Create Admin User
-
+**Migrations failed:**
 ```bash
-# Connect to database
-docker-compose exec postgres psql -U postgres -d ucpready
+# Check migration status
+docker compose exec postgres psql -U postgres -d ucpready -c "SELECT * FROM schema_migrations ORDER BY applied_at DESC LIMIT 5"
 
-# Create admin (replace password hash)
-INSERT INTO admins (email, password_hash, role)
-VALUES ('admin@example.com', '$2a$10$...', 'superadmin');
+# Manually run migrations
+docker compose run --rm api npm run migrate
 ```
 
-Generate password hash:
-
+**SSL certificate issues:**
 ```bash
-node -e "console.log(require('bcryptjs').hashSync('your-password', 10))"
+# Check Caddy logs
+docker compose logs caddy
+
+# Verify DNS is correct
+dig +short your-domain.com
+
+# Restart Caddy
+docker compose restart caddy
 ```
 
-### Create First Tenant
-
-```bash
-docker-compose exec postgres psql -U postgres -d ucpready -c "
-INSERT INTO tenants (domain, name, status)
-VALUES ('localhost', 'Local Tenant', 'active');
-"
-```
-
-### Access
-
-- **Frontend:** http://localhost
-- **API:** http://localhost/api
-- **Admin:** http://localhost/admin (login endpoint)
+**Can't access admin dashboard:**
+1. Verify API health: `curl https://your-domain.com/health`
+2. Check admin user exists: `docker compose exec postgres psql -U postgres -d ucpready -c "SELECT email, role FROM admins"`
+3. Reset admin password if needed (see DEPLOYMENT.md)
 
 ## Documentation
 

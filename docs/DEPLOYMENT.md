@@ -1,5 +1,11 @@
 # Deployment Guide
 
+> **⚡ Quick Install:** For automated installation, use `./setup.sh` instead. See [README.md](../README.md#-installation-5-minute-setup) for one-command setup.
+>
+> This document describes **manual deployment steps** for advanced users or custom configurations.
+
+---
+
 ## Prerequisites
 
 - Docker and Docker Compose installed
