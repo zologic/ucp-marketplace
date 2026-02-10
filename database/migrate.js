@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/ucpready';
-const MIGRATIONS_DIR = path.join(__dirname, 'migrations');
+const MIGRATIONS_DIR = path.join('/database', 'migrations');
 
 async function runMigrations() {
     const client = new Client({ connectionString: DATABASE_URL });
