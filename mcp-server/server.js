@@ -1,6 +1,10 @@
 require('dotenv').config({ path: '../.env' });
 const { Server } = require('@modelcontextprotocol/sdk/server/index.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
+const {
+    ListToolsRequestSchema,
+    CallToolRequestSchema
+} = require('@modelcontextprotocol/sdk/types.js');
 const express = require('express');
 const { Pool } = require('pg');
 const axios = require('axios');
@@ -113,7 +117,7 @@ const mcpServer = new Server(
 );
 
 // Tool: search_products
-mcpServer.setRequestHandler('tools/list', async () => {
+mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
         tools: [
             {
@@ -203,7 +207,7 @@ mcpServer.setRequestHandler('tools/list', async () => {
 });
 
 // Tool execution handler
-mcpServer.setRequestHandler('tools/call', async (request) => {
+mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
     try {
