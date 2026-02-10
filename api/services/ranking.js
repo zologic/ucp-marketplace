@@ -110,6 +110,23 @@ function calculateRelevanceScore(product, intent) {
 }
 
 /**
+ * Calculate freshness score
+ * Rewards new products, prevents old products from dominating forever
+ */
+function calculateFreshnessScore(product) {
+    // Calculate days since product was indexed
+    const indexedAt = new Date(product.indexed_at);
+    const now = new Date();
+    const daysSinceIndexed = (now - indexedAt) / (1000 * 60 * 60 * 24);
+
+    // Exponential decay with 30-day half-life
+    // New products get score near 1.0, older products decay toward 0
+    const freshnessScore = Math.exp(-daysSinceIndexed / 30);
+
+    return Math.max(0, Math.min(1, freshnessScore));
+}
+
+/**
  * Apply diversity boost
  * Prevent one merchant from dominating results
  */
@@ -163,13 +180,15 @@ async function rankProducts(products, intent, db, categoryWeights = null) {
         const priceScore = calculatePriceScore(product, intent);
         const trustScore = trustScores[product.merchant_id] || 0.5;
         const relevanceScore = calculateRelevanceScore(product, intent);
+        const freshnessScore = calculateFreshnessScore(product);
 
         // Calculate final weighted score
         const finalScore =
             weights.availability * availabilityScore +
             weights.price * priceScore +
             weights.trust * trustScore +
-            weights.relevance * relevanceScore;
+            weights.relevance * relevanceScore +
+            0.05 * freshnessScore; // 5% weight for freshness (keeps it small)
 
         return {
             ...product,
@@ -177,6 +196,7 @@ async function rankProducts(products, intent, db, categoryWeights = null) {
             price_score: priceScore,
             trust_score: trustScore,
             relevance_score: relevanceScore,
+            freshness_score: freshnessScore,
             final_score: finalScore
         };
     });
@@ -231,5 +251,6 @@ module.exports = {
     calculateMerchantTrust,
     calculateAvailabilityScore,
     calculatePriceScore,
-    calculateRelevanceScore
+    calculateRelevanceScore,
+    calculateFreshnessScore
 };
