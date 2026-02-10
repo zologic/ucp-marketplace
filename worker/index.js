@@ -9,6 +9,7 @@ const { rollupStats } = require('./jobs/rollupStats');
 const { generateInvoices } = require('./jobs/generateInvoices');
 const { generateStatements } = require('./jobs/generateStatements');
 const { enforceNonPayment } = require('./jobs/enforceNonPayment');
+const { generateSitemaps } = require('./jobs/generateSitemaps');
 
 // Database pool
 const db = new Pool({
@@ -78,6 +79,14 @@ cron.schedule('0 6 * * *', () => {
     timezone: 'UTC'
 });
 
+// Sitemap generation - Daily at 03:00 UTC (after product indexing)
+cron.schedule('0 3 * * *', () => {
+    console.log('Running sitemap generation job...');
+    generateSitemaps(db).catch(err => console.error('Sitemap generation failed:', err));
+}, {
+    timezone: 'UTC'
+});
+
 console.log('Worker service started. Scheduled jobs:');
 console.log('- Merchant verification: Daily at 02:00 UTC');
 console.log('- Product indexing: Every 6 hours');
@@ -85,6 +94,7 @@ console.log('- Stats rollup: Daily at 00:30 UTC');
 console.log('- Invoice generation: Monthly on 1st at 00:00 UTC');
 console.log('- Statement generation: Monthly on 1st at 01:00 UTC');
 console.log('- Non-payment enforcement: Daily at 06:00 UTC');
+console.log('- Sitemap generation: Daily at 03:00 UTC');
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
