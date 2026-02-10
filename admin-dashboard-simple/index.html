@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UCPReady Admin Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header h1 { font-size: 24px; color: #333; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 20px; }
+        .stat-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .stat-card h3 { font-size: 14px; color: #666; margin-bottom: 10px; }
+        .stat-card .value { font-size: 32px; font-weight: bold; color: #333; }
+        .error { background: #fee; color: #c00; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .success { background: #efe; color: #060; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .btn { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+        .btn:hover { background: #0056b3; }
+        .logout { float: right; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>UCPReady Admin Dashboard</h1>
+            <button class="btn logout" onclick="logout()">Logout</button>
+        </div>
+
+        <div id="error" class="error" style="display: none;"></div>
+        <div id="success" class="success" style="display: none;"></div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <h3>Active Merchants</h3>
+                <div class="value" id="merchants">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Total Tenants</h3>
+                <div class="value" id="tenants">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Revenue (MTD)</h3>
+                <div class="value" id="revenue">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Searches Today</h3>
+                <div class="value" id="searches">-</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/admin';
+
+        function getToken() {
+            return localStorage.getItem('admin_token');
+        }
+
+        function logout() {
+            localStorage.removeItem('admin_token');
+            localStorage.removeItem('admin_user');
+            window.location.href = '/admin-ui/login.html';
+        }
+
+        async function loadStats() {
+            const token = getToken();
+            if (!token) {
+                window.location.href = '/admin-ui/login.html';
+                return;
+            }
+
+            try {
+                const response = await fetch(API_BASE + '/dashboard/stats', {
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.status === 401) {
+                    logout();
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error('Failed to load stats');
+                }
+
+                const data = await response.json();
+
+                document.getElementById('merchants').textContent = data.active_merchants || 0;
+                document.getElementById('tenants').textContent = data.total_tenants || 0;
+                document.getElementById('revenue').textContent = '€' + ((data.revenue_mtd_cents || 0) / 100).toFixed(2);
+                document.getElementById('searches').textContent = data.searches_today || 0;
+
+            } catch (error) {
+                document.getElementById('error').textContent = 'Failed to load dashboard stats: ' + error.message;
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+
+        // Load stats on page load
+        loadStats();
+
+        // Refresh every 30 seconds
+        setInterval(loadStats, 30000);
+    </script>
+</body>
+</html>

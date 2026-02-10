@@ -1,0 +1,16 @@
+FROM nginx:alpine
+
+# Copy static files
+COPY *.html /usr/share/nginx/html/
+
+# Create nginx config
+RUN echo 'server { \
+    listen 80; \
+    root /usr/share/nginx/html; \
+    index index.html; \
+    location / { \
+        try_files $uri $uri/ /index.html; \
+    } \
+}' > /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
