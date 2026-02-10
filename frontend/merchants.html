@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>For Merchants - UCPReady AI Commerce Directory</title>
+    <meta name="description" content="Sell to AI agents and voice assistants. Connect your WooCommerce store to the AI commerce revolution.">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .page-header {
+            text-align: center;
+            padding: 80px 20px 40px;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: white;
+        }
+        .page-header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+        .page-header p {
+            font-size: 1.25rem;
+            opacity: 0.95;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .trust-bar {
+            text-align: center;
+            padding: 20px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .trust-bar span {
+            margin: 0 12px;
+            color: #64748b;
+        }
+        .content-section {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 60px 20px;
+        }
+        .how-it-works {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 40px;
+            margin-top: 40px;
+        }
+        .step {
+            text-align: center;
+            padding: 30px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+        }
+        .step-number {
+            display: inline-block;
+            width: 48px;
+            height: 48px;
+            line-height: 48px;
+            border-radius: 50%;
+            background: #2563eb;
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+        .step h3 {
+            font-size: 1.25rem;
+            margin-bottom: 12px;
+            color: #1e293b;
+        }
+        .step p {
+            color: #64748b;
+        }
+        .benefits {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+        .benefit-card {
+            padding: 30px;
+            background: #f8fafc;
+            border-radius: 12px;
+        }
+        .benefit-card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 12px;
+            color: #1e293b;
+        }
+        .benefit-card p {
+            color: #64748b;
+        }
+        .pricing-table {
+            max-width: 600px;
+            margin: 40px auto;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .pricing-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 20px 30px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .pricing-row:last-child {
+            border-bottom: none;
+        }
+        .pricing-row strong {
+            color: #1e293b;
+        }
+        .pricing-row span {
+            color: #2563eb;
+            font-weight: 600;
+        }
+        .faq {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .faq-item {
+            margin-bottom: 24px;
+            padding: 24px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+        }
+        .faq-item h4 {
+            font-size: 1.125rem;
+            margin-bottom: 12px;
+            color: #1e293b;
+        }
+        .faq-item p {
+            color: #64748b;
+        }
+        .cta-section {
+            text-align: center;
+            padding: 80px 20px;
+            background: #f8fafc;
+            margin-top: 60px;
+        }
+        .cta-section h2 {
+            font-size: 2rem;
+            margin-bottom: 24px;
+            color: #1e293b;
+        }
+        .cta-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn-primary, .btn-secondary {
+            padding: 16px 32px;
+            font-size: 1.125rem;
+            font-weight: 600;
+            border-radius: 12px;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+            border: none;
+        }
+        .btn-primary:hover {
+            background: #1d4ed8;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+        .btn-secondary {
+            background: white;
+            color: #2563eb;
+            border: 2px solid #2563eb;
+        }
+        .btn-secondary:hover {
+            background: #eff6ff;
+        }
+        @media (max-width: 768px) {
+            .page-header h1 {
+                font-size: 2rem;
+            }
+            .page-header p {
+                font-size: 1.125rem;
+            }
+            .cta-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero -->
+    <header class="page-header">
+        <h1>Sell to AI Agents and Voice Assistants</h1>
+        <p>Connect your WooCommerce store to the AI commerce revolution. Get discovered by AI shopping agents worldwide.</p>
+    </header>
+
+    <!-- Trust Indicators -->
+    <div class="trust-bar">
+        <span>No commissions until you sell</span>
+        <span class="separator">•</span>
+        <span>AI-ready in 5 minutes</span>
+        <span class="separator">•</span>
+        <span>100+ stores connected</span>
+    </div>
+
+    <!-- How It Works -->
+    <section class="content-section">
+        <h2 style="text-align: center; font-size: 2rem; color: #1e293b; margin-bottom: 20px;">How It Works</h2>
+        <div class="how-it-works">
+            <div class="step">
+                <div class="step-number">1</div>
+                <h3>Install Plugin</h3>
+                <p>Download UCPReady WooCommerce plugin from WordPress.org. Install like any WordPress plugin - no coding required.</p>
+            </div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <h3>Get Verified</h3>
+                <p>Submit your store for directory approval. We verify your UCP compatibility and activate your listing.</p>
+            </div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <h3>Start Selling</h3>
+                <p>AI agents can instantly search and purchase your products. Orders sync directly to your WooCommerce store.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Benefits -->
+    <section class="content-section" style="background: #f8fafc;">
+        <h2 style="text-align: center; font-size: 2rem; color: #1e293b; margin-bottom: 20px;">Why UCPReady?</h2>
+        <div class="benefits">
+            <div class="benefit-card">
+                <h3>Reach New Customers</h3>
+                <p>AI shopping assistants discover your products automatically. No manual listings - your WooCommerce catalog syncs automatically.</p>
+            </div>
+            <div class="benefit-card">
+                <h3>Zero Integration</h3>
+                <p>No API coding required. Works with your existing WooCommerce setup. Product updates sync automatically.</p>
+            </div>
+            <div class="benefit-card">
+                <h3>Performance-Based Pricing</h3>
+                <p>Only pay commission when you make a sale (10% default rate). No monthly fees. No setup costs.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing -->
+    <section class="content-section">
+        <h2 style="text-align: center; font-size: 2rem; color: #1e293b; margin-bottom: 20px;">Simple, Transparent Pricing</h2>
+        <div class="pricing-table">
+            <div class="pricing-row">
+                <strong>Plugin</strong>
+                <span>FREE</span>
+            </div>
+            <div class="pricing-row">
+                <strong>Directory listing</strong>
+                <span>FREE</span>
+            </div>
+            <div class="pricing-row">
+                <strong>Commission per sale</strong>
+                <span>10% (default)</span>
+            </div>
+            <div class="pricing-row">
+                <strong>CPC (optional)</strong>
+                <span>For premium visibility</span>
+            </div>
+        </div>
+        <p style="text-align: center; color: #64748b; margin-top: 20px;">Custom rates available for enterprise merchants</p>
+    </section>
+
+    <!-- FAQ -->
+    <section class="content-section" style="background: #f8fafc;">
+        <h2 style="text-align: center; font-size: 2rem; color: #1e293b; margin-bottom: 20px;">Frequently Asked Questions</h2>
+        <div class="faq">
+            <div class="faq-item">
+                <h4>What is UCP?</h4>
+                <p>Universal Commerce Protocol - the standard that enables AI agents to shop on your store. Our plugin implements UCP for WooCommerce automatically.</p>
+            </div>
+            <div class="faq-item">
+                <h4>Do I need technical knowledge?</h4>
+                <p>No. Install the plugin like any WordPress plugin. No coding required. Our verification process is automatic.</p>
+            </div>
+            <div class="faq-item">
+                <h4>How do I get listed?</h4>
+                <p>After installing the plugin, contact us to submit your store for approval. Verification typically takes 1-2 business days.</p>
+            </div>
+            <div class="faq-item">
+                <h4>Can I disable it anytime?</h4>
+                <p>Yes. Deactivate the plugin to opt out immediately. Your store disappears from the directory within minutes.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta-section">
+        <h2>Ready to join the AI commerce revolution?</h2>
+        <div class="cta-buttons">
+            <a href="https://wordpress.org/plugins/ucpready" class="btn-primary" target="_blank" rel="noopener">Download Plugin</a>
+            <a href="mailto:merchants@ucpready.com" class="btn-secondary">Contact Us</a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <a href="/merchants">For merchants</a>
+        <span class="separator">•</span>
+        <a href="/partners">Partner / White-label</a>
+        <span class="separator">•</span>
+        <a href="/privacy">Privacy</a>
+        <span class="separator">•</span>
+        <a href="/legal">Legal</a>
+    </footer>
+</body>
+</html>

@@ -1,8 +1,16 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { Toaster } from '@/components/ui/toaster';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
+import Merchants from '@/pages/Merchants';
+import Tenants from '@/pages/Tenants';
+import Analytics from '@/pages/Analytics';
+import Billing from '@/pages/Billing';
+import AuditLogs from '@/pages/AuditLogs';
+import SystemHealth from '@/pages/SystemHealth';
+import AdminUsers from '@/pages/AdminUsers';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 
 const queryClient = new QueryClient({
@@ -46,13 +54,13 @@ function AppRoutes() {
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
-        <Route path="merchants" element={<div className="text-center py-12 text-muted-foreground">Merchants page - to be implemented</div>} />
-        <Route path="tenants" element={<div className="text-center py-12 text-muted-foreground">Tenants page - to be implemented</div>} />
-        <Route path="analytics" element={<div className="text-center py-12 text-muted-foreground">Analytics page - to be implemented</div>} />
-        <Route path="billing" element={<div className="text-center py-12 text-muted-foreground">Billing page - to be implemented</div>} />
-        <Route path="audit-logs" element={<div className="text-center py-12 text-muted-foreground">Audit Logs page - to be implemented</div>} />
-        <Route path="system-health" element={<div className="text-center py-12 text-muted-foreground">System Health page - to be implemented</div>} />
-        <Route path="admin-users" element={<div className="text-center py-12 text-muted-foreground">Admin Users page - to be implemented</div>} />
+        <Route path="merchants" element={<Merchants />} />
+        <Route path="tenants" element={<Tenants />} />
+        <Route path="analytics" element={<Analytics />} />
+        <Route path="billing" element={<Billing />} />
+        <Route path="audit-logs" element={<AuditLogs />} />
+        <Route path="system-health" element={<SystemHealth />} />
+        <Route path="admin-users" element={<AdminUsers />} />
       </Route>
     </Routes>
   );
@@ -64,6 +72,7 @@ function App() {
       <BrowserRouter>
         <AuthProvider>
           <AppRoutes />
+          <Toaster />
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>
