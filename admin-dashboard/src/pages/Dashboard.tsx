@@ -6,13 +6,25 @@ import type { DashboardStats } from '@/types';
 import { TrendingUp, Store, Building2, Search } from 'lucide-react';
 
 export default function Dashboard() {
-  const { data: stats, isLoading } = useQuery<DashboardStats>({
+  const { data: stats, isLoading, error } = useQuery<DashboardStats>({
     queryKey: ['dashboard-stats'],
     queryFn: async () => {
       const response = await apiClient.get('/dashboard/stats');
       return response.data;
     },
   });
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-red-600">Failed to load dashboard stats. Please try refreshing the page.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
