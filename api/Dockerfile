@@ -17,6 +17,9 @@ RUN npm ci --only=production
 # Copy application code
 COPY . .
 
+# Copy database migrations from parent directory
+COPY --chown=nodejs:nodejs ../database /database
+
 # Change ownership to non-root user
 RUN chown -R nodejs:nodejs /app
 
