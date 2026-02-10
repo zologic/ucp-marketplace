@@ -700,7 +700,7 @@ EOF
     echo ""
 
     echo -e "${CYAN}📊 Admin Dashboard:${NC}"
-    echo -e "   ${BLUE}https://${PRIMARY_DOMAIN}/admin/login${NC}"
+    echo -e "   ${BLUE}https://${PRIMARY_DOMAIN}/admin-ui/login${NC}"
     echo ""
 
     echo -e "${CYAN}📝 Next Steps:${NC}"
