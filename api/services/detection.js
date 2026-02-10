@@ -108,12 +108,26 @@ async function detectWooCommerce(domain) {
 
         // Determine if WooCommerce is detected
         const detected = checks.wc_api || (checks.wp_api && checks.html_assets);
-        const confidence = Object.values(checks).filter(Boolean).length / Object.keys(checks).length;
+
+        // Calculate confidence score (0-100)
+        // WC API = high confidence (alone sufficient)
+        // WP API + HTML assets = medium-high confidence
+        // Headers/HTML alone = low confidence
+        let confidence = 0;
+        if (checks.wc_api) {
+            confidence = 95; // Very high confidence
+        } else if (checks.wp_api && checks.html_assets) {
+            confidence = 80; // High confidence
+        } else if (checks.wp_api || checks.html_assets) {
+            confidence = 40; // Low confidence
+        } else if (checks.headers) {
+            confidence = 20; // Very low confidence
+        }
 
         return {
             platform: detected ? 'woocommerce' : 'unknown',
             detected,
-            confidence: Math.round(confidence * 100),
+            confidence,
             checks
         };
 
@@ -141,7 +155,8 @@ async function detectUCPReady(domain) {
         installed: false,
         active: false,
         version: null,
-        ucp_endpoint: null
+        ucp_endpoint: null,
+        confidence: 0
     };
 
     try {
@@ -158,6 +173,7 @@ async function detectUCPReady(domain) {
                 result.installed = true;
                 result.active = true;
                 result.ucp_endpoint = `${baseUrl}/.well-known/ucp`;
+                result.confidence = 95; // UCP manifest = very high confidence
 
                 // Extract version if available
                 if (manifest.version) {
@@ -183,6 +199,7 @@ async function detectUCPReady(domain) {
                     result.active = status.active !== false; // Default to true if not specified
                     result.version = status.version || null;
                     result.ucp_endpoint = `${baseUrl}/.well-known/ucp`;
+                    result.confidence = 85; // Status endpoint = high confidence
                 }
             } catch (err) {
                 // Plugin not installed or inactive

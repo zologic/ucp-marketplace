@@ -28,6 +28,38 @@ router.post('/onboard', async (req, res) => {
             });
         }
 
+        // Abuse prevention: Check if domain was checked recently (24h cooldown)
+        const recentCheck = await req.app.locals.db.query(`
+            SELECT id, last_detection_at
+            FROM merchants
+            WHERE tenant_id = $1 AND domain = $2
+              AND last_detection_at > NOW() - INTERVAL '24 hours'
+        `, [tenantId, domain]);
+
+        if (recentCheck.rows.length > 0) {
+            return res.status(429).json({
+                error: 'This domain was recently checked. Please try again later.',
+                retry_after: 86400 // 24 hours in seconds
+            });
+        }
+
+        // IP-based rate limiting (per tenant)
+        const clientIp = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+        const ipRateLimitKey = `onboard:${tenantId}:${clientIp}`;
+
+        // Check Redis for IP rate limit (5 attempts per hour)
+        const ipAttempts = await req.app.locals.redis.get(ipRateLimitKey);
+        if (ipAttempts && parseInt(ipAttempts) >= 5) {
+            return res.status(429).json({
+                error: 'Too many onboarding attempts. Please try again later.',
+                retry_after: 3600 // 1 hour
+            });
+        }
+
+        // Increment IP attempt counter
+        await req.app.locals.redis.incr(ipRateLimitKey);
+        await req.app.locals.redis.expire(ipRateLimitKey, 3600); // 1 hour TTL
+
         // Run store detection
         console.log(`[Onboarding] Detecting store: ${domain}`);
         const detection = await detectStore(domain);
