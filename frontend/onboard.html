@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Start Your AI Commerce Journey - UCPReady</title>
+    <meta name="description" content="Check your store's compatibility and get listed in the AI commerce directory in minutes.">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .page-header {
+            text-align: center;
+            padding: 80px 20px 40px;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: white;
+        }
+        .page-header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+        .page-header p {
+            font-size: 1.25rem;
+            opacity: 0.95;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .onboard-container {
+            max-width: 600px;
+            margin: 60px auto;
+            padding: 20px;
+        }
+        .onboard-form {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        .form-group {
+            margin-bottom: 24px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        .form-group input {
+            width: 100%;
+            height: 48px;
+            padding: 0 16px;
+            font-size: 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            outline: none;
+            transition: all 0.2s;
+        }
+        .form-group input:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        .form-group input::placeholder {
+            color: #94a3b8;
+        }
+        .error-message {
+            display: none;
+            margin-top: 8px;
+            padding: 12px;
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .error-message.visible {
+            display: block;
+        }
+        .submit-button {
+            width: 100%;
+            height: 56px;
+            font-size: 18px;
+            font-weight: 600;
+            color: #ffffff;
+            background-color: #2563eb;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+        }
+        .submit-button:hover:not(:disabled) {
+            background-color: #1d4ed8;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+            transform: translateY(-1px);
+        }
+        .submit-button:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #ffffff;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .success-message {
+            display: none;
+            text-align: center;
+            padding: 60px 40px;
+        }
+        .success-message.visible {
+            display: block;
+        }
+        .success-message .icon {
+            font-size: 64px;
+            margin-bottom: 24px;
+        }
+        .success-message h2 {
+            font-size: 2rem;
+            color: #1e293b;
+            margin-bottom: 16px;
+        }
+        .success-message p {
+            font-size: 1.125rem;
+            color: #64748b;
+            margin-bottom: 12px;
+        }
+        .info-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 24px;
+        }
+        .info-box h4 {
+            font-size: 1rem;
+            color: #1e293b;
+            margin-bottom: 12px;
+        }
+        .info-box ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .info-box li {
+            padding: 8px 0;
+            color: #64748b;
+            font-size: 14px;
+        }
+        .info-box li:before {
+            content: "✓ ";
+            color: #2563eb;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        @media (max-width: 768px) {
+            .page-header h1 {
+                font-size: 2rem;
+            }
+            .onboard-form {
+                padding: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero -->
+    <header class="page-header">
+        <h1>Start Your AI-Powered Store Journey</h1>
+        <p>Check your WooCommerce store's compatibility and get listed in minutes.</p>
+    </header>
+
+    <!-- Onboarding Form -->
+    <div class="onboard-container">
+        <div class="onboard-form" id="onboard-form">
+            <form id="compatibility-form">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        placeholder="your@email.com"
+                        required
+                        autocomplete="email"
+                    >
+                    <div class="error-message" id="email-error"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="domain">Store URL</label>
+                    <input
+                        type="url"
+                        id="domain"
+                        name="domain"
+                        placeholder="https://yourstore.com"
+                        required
+                    >
+                    <div class="error-message" id="domain-error"></div>
+                </div>
+
+                <div class="form-group">
+                    <button type="submit" class="submit-button" id="submit-btn">
+                        Check Store Compatibility
+                    </button>
+                </div>
+
+                <div class="error-message" id="form-error"></div>
+            </form>
+
+            <div class="info-box">
+                <h4>What we'll check:</h4>
+                <ul>
+                    <li>WooCommerce installation</li>
+                    <li>UCPReady plugin status</li>
+                    <li>Store compatibility</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Success Message (hidden initially) -->
+        <div class="success-message" id="success-message">
+            <div class="icon">✓</div>
+            <h2 id="success-title">Check your email!</h2>
+            <p id="success-text">We've sent you the next steps to get your store listed in the AI commerce directory.</p>
+            <p style="font-size: 0.875rem; color: #94a3b8; margin-top: 24px;">Didn't receive it? Check your spam folder or <a href="mailto:merchants@ucpready.com" style="color: #2563eb;">contact us</a>.</p>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer" style="margin-top: auto; padding: 40px 20px; text-align: center; background: #f8fafc; border-top: 1px solid #e2e8f0;">
+        <a href="/merchants">For merchants</a>
+        <span class="separator">•</span>
+        <a href="/partners">Partner / White-label</a>
+        <span class="separator">•</span>
+        <a href="/privacy">Privacy</a>
+        <span class="separator">•</span>
+        <a href="/legal">Legal</a>
+    </footer>
+
+    <script>
+        const form = document.getElementById('compatibility-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const formContainer = document.getElementById('onboard-form');
+        const successMessage = document.getElementById('success-message');
+        const emailInput = document.getElementById('email');
+        const domainInput = document.getElementById('domain');
+        const emailError = document.getElementById('email-error');
+        const domainError = document.getElementById('domain-error');
+        const formError = document.getElementById('form-error');
+
+        let isSubmitting = false;
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Prevent double submission
+            if (isSubmitting) return;
+
+            // Clear previous errors
+            emailError.textContent = '';
+            emailError.classList.remove('visible');
+            domainError.textContent = '';
+            domainError.classList.remove('visible');
+            formError.textContent = '';
+            formError.classList.remove('visible');
+
+            // Get form values
+            const email = emailInput.value.trim();
+            const domain = domainInput.value.trim();
+
+            // Client-side validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                emailError.textContent = 'Please enter a valid email address';
+                emailError.classList.add('visible');
+                return;
+            }
+
+            try {
+                new URL(domain);
+            } catch (err) {
+                domainError.textContent = 'Please enter a valid URL (e.g., https://yourstore.com)';
+                domainError.classList.add('visible');
+                return;
+            }
+
+            // Set loading state
+            isSubmitting = true;
+            submitBtn.disabled = true;
+            const originalText = submitBtn.textContent;
+            submitBtn.innerHTML = '<span class="loading-spinner"></span>Checking your store...';
+
+            try {
+                const response = await fetch('/api/onboard', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, domain })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Success - hide form, show success message
+                    formContainer.style.display = 'none';
+                    successMessage.classList.add('visible');
+
+                    // Update success message based on outcome
+                    const successTitle = document.getElementById('success-title');
+                    const successText = document.getElementById('success-text');
+
+                    if (data.outcome === 'ready') {
+                        successTitle.textContent = 'Your store is ready!';
+                        successText.textContent = 'Your store has been verified and will appear in search results shortly. Check your email for details.';
+                    } else if (data.redirect_url) {
+                        successTitle.textContent = 'Almost there!';
+                        successText.textContent = 'Check your email for the next steps to complete your setup.';
+
+                        // Optional: Auto-redirect if provided
+                        if (data.redirect_delay && data.redirect_delay > 0) {
+                            setTimeout(() => {
+                                window.location.href = data.redirect_url;
+                            }, data.redirect_delay);
+                        }
+                    } else {
+                        successTitle.textContent = 'Check your email!';
+                        successText.textContent = data.message || 'We\'ve sent you the next steps to get your store listed.';
+                    }
+                } else {
+                    // Handle errors
+                    if (response.status === 400) {
+                        formError.textContent = data.error || 'Invalid email or domain';
+                    } else if (response.status === 429) {
+                        formError.textContent = data.error || 'Too many attempts. Please try again later.';
+                    } else {
+                        formError.textContent = data.error || 'Service temporarily unavailable. Please try again.';
+                    }
+                    formError.classList.add('visible');
+                }
+            } catch (error) {
+                formError.textContent = 'Network error. Please check your connection and try again.';
+                formError.classList.add('visible');
+                console.error('Onboarding error:', error);
+            } finally {
+                // Reset button state
+                isSubmitting = false;
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        });
+    </script>
+</body>
+</html>
