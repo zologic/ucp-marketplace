@@ -30,8 +30,8 @@ services:
   # API - Backend REST API
   api:
     build:
-      context: ./api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./api/Dockerfile
     environment:
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/ucpready
       - REDIS_URL=redis://redis:6379
