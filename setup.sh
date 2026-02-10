@@ -464,6 +464,16 @@ ${PRIMARY_DOMAIN} {
         reverse_proxy api:3000
     }
 
+    # Admin UI
+    handle /admin-ui/* {
+        reverse_proxy admin:5173
+    }
+
+    # Internal routes (service-to-service)
+    handle /internal/* {
+        reverse_proxy api:3000
+    }
+
     # Health check endpoint
     handle /health {
         reverse_proxy api:3000
