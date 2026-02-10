@@ -11,6 +11,12 @@ import { showLoading, hideLoading, renderResults, renderError, clearError } from
  * @param {string} apiBase - API base URL
  */
 export async function handleSearch(query, apiBase) {
+    // Smooth scroll to results area on subsequent searches
+    const resultsSection = document.getElementById('results-section');
+    if (resultsSection && !resultsSection.classList.contains('hidden')) {
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
     showLoading();
     clearError();
 
