@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Shopping</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <main class="container">
+        <!-- Search Section -->
+        <section id="search-section" class="search-section">
+            <h1 class="site-title">AI Shopping</h1>
+            <div class="search-box">
+                <input
+                    type="text"
+                    id="search-input"
+                    placeholder="Find a SOHO shirt under 20 EUR"
+                    aria-label="Search products"
+                    autocomplete="off"
+                />
+                <button id="search-button" class="search-button" aria-label="Search">
+                    Search
+                </button>
+            </div>
+        </section>
+
+        <!-- Results Section (hidden initially) -->
+        <section id="results-section" class="results-section hidden">
+            <h2 class="results-title">Search Results</h2>
+            <div id="results-container" class="results-container"></div>
+        </section>
+
+        <!-- Loading State -->
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Searching...</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="error" class="error hidden"></div>
+    </main>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>

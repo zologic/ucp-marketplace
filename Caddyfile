@@ -1,0 +1,57 @@
+# Caddyfile for multi-domain white-label routing
+# Caddy automatically provisions SSL certificates via Let's Encrypt
+
+# Default catch-all for any domain (development)
+:80 {
+    # Route /api/* requests to backend API
+    handle /api/* {
+        reverse_proxy api:3000
+    }
+
+    # Route /admin/* requests to backend API (admin routes)
+    handle /admin/* {
+        reverse_proxy api:3000
+    }
+
+    # Route /internal/* requests to backend API (internal routes)
+    handle /internal/* {
+        reverse_proxy api:3000
+    }
+
+    # All other requests go to frontend
+    handle {
+        reverse_proxy frontend:80
+    }
+}
+
+# Production multi-domain configuration (uncomment and configure)
+# Replace with your actual domains
+#
+# shop.ai {
+#     handle /api/* {
+#         reverse_proxy api:3000
+#     }
+#     handle /admin/* {
+#         reverse_proxy api:3000
+#     }
+#     handle {
+#         reverse_proxy frontend:80
+#     }
+# }
+#
+# partner.example.com {
+#     handle /api/* {
+#         reverse_proxy api:3000
+#     }
+#     handle /admin/* {
+#         reverse_proxy api:3000
+#     }
+#     handle {
+#         reverse_proxy frontend:80
+#     }
+# }
+#
+# admin.ucpready.io {
+#     # Admin dashboard (when implemented)
+#     reverse_proxy admin:5173
+# }
