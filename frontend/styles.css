@@ -329,3 +329,91 @@ button:focus-visible {
     outline: 2px solid #ffffff;
     outline-offset: -4px;
 }
+
+/* Content Pages */
+.content-page {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 60px 20px;
+}
+
+.content-page h1 {
+    font-size: 2.5em;
+    margin-bottom: 0.5em;
+    color: #111827;
+}
+
+.content-page h2 {
+    font-size: 1.8em;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+    color: #1f2937;
+}
+
+.content-page p {
+    margin-bottom: 1em;
+    line-height: 1.7;
+    color: #4b5563;
+}
+
+.content-page em {
+    color: #6b7280;
+    font-size: 0.95em;
+}
+
+.content-page ul,
+.content-page ol {
+    margin-bottom: 1em;
+    margin-left: 1.5em;
+    line-height: 1.7;
+    color: #4b5563;
+}
+
+.content-page li {
+    margin-bottom: 0.5em;
+}
+
+.content-page strong {
+    color: #111827;
+    font-weight: 600;
+}
+
+.content-page a {
+    color: #2563eb;
+    text-decoration: none;
+}
+
+.content-page a:hover {
+    text-decoration: underline;
+}
+
+.content-page .button {
+    display: inline-block;
+    margin-top: 2em;
+    padding: 12px 24px;
+    background-color: #2563eb;
+    color: #ffffff;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.content-page .button:hover {
+    background-color: #1d4ed8;
+    text-decoration: none;
+}
+
+@media (max-width: 640px) {
+    .content-page {
+        padding: 40px 16px;
+    }
+
+    .content-page h1 {
+        font-size: 2em;
+    }
+
+    .content-page h2 {
+        font-size: 1.5em;
+    }
+}
