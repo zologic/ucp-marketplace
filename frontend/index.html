@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Search</title>
+    <meta name="description" content="Search products across trusted stores. Compare prices and buy directly from merchants.">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <main class="container">
+        <!-- Search Section (Hero) -->
+        <section id="search-section" class="search-section">
+            <div class="search-box">
+                <input
+                    type="text"
+                    id="search-input"
+                    placeholder="Search products across trusted stores"
+                    aria-label="Search products"
+                    autocomplete="off"
+                />
+                <button id="search-button" class="search-button" aria-label="Search">
+                    Search
+                </button>
+            </div>
+            <div class="trust-indicators">
+                <span>Compare prices from verified stores</span>
+                <span class="separator">•</span>
+                <span>No signup required</span>
+                <span class="separator">•</span>
+                <span>Buy directly from merchants</span>
+            </div>
+        </section>
+
+        <!-- Results Section (hidden initially) -->
+        <section id="results-section" class="results-section hidden">
+            <div id="results-container" class="results-container"></div>
+        </section>
+
+        <!-- Loading State -->
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Searching...</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="error" class="error hidden"></div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <a href="/merchants">For merchants</a>
+        <span class="separator">•</span>
+        <a href="/partners">Partner / White-label</a>
+        <span class="separator">•</span>
+        <a href="/privacy">Privacy</a>
+        <span class="separator">•</span>
+        <a href="/legal">Legal</a>
+    </footer>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
