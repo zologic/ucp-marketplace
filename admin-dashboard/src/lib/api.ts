@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost/admin';
+// Use relative URL so it works on any domain (localhost, bizform.app, etc.)
+// The Caddy reverse proxy will handle routing /admin/* to the API service
+const API_URL = import.meta.env.VITE_API_URL || '/admin';
 
 export const apiClient = axios.create({
   baseURL: API_URL,

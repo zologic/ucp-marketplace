@@ -5,6 +5,7 @@ import path from 'path'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  base: '/admin-ui/',  // Set base path for admin dashboard routing
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
