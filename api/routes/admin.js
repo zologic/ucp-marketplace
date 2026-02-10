@@ -630,4 +630,324 @@ function getRecommendationMessage(status, totalClicks, conversionRate) {
     }
 }
 
+// GET /admin/merchants/:id - Get detailed merchant info
+router.get('/merchants/:id', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const result = await req.app.locals.db.query(`
+            SELECT m.*, t.name as tenant_name, t.domain as tenant_domain,
+                   mb.status as billing_status, mb.billing_mode,
+                   mb.cpc_rate, mb.cpc_billing_enabled, mb.cpc_enabled_at
+            FROM merchants m
+            JOIN tenants t ON m.tenant_id = t.id
+            LEFT JOIN merchant_billing mb ON m.id = mb.merchant_id
+            WHERE m.id = $1
+        `, [id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Merchant not found' });
+        }
+
+        res.json({ merchant: result.rows[0] });
+    } catch (error) {
+        console.error('Get merchant error:', error);
+        res.status(500).json({ error: 'Failed to get merchant' });
+    }
+});
+
+// PATCH /admin/merchants/:id - Update merchant settings
+router.patch('/merchants/:id', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { domain, admin_override } = req.body;
+
+        const updates = [];
+        const params = [id];
+        let paramIndex = 2;
+
+        if (domain !== undefined) {
+            updates.push(`domain = $${paramIndex}`);
+            params.push(domain.toLowerCase().trim());
+            paramIndex++;
+        }
+
+        if (admin_override !== undefined) {
+            updates.push(`admin_override = $${paramIndex}`);
+            params.push(admin_override);
+            paramIndex++;
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No fields to update' });
+        }
+
+        updates.push('updated_at = NOW()');
+
+        const query = `UPDATE merchants SET ${updates.join(', ')} WHERE id = $1 RETURNING *`;
+        const result = await req.app.locals.db.query(query, params);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Merchant not found' });
+        }
+
+        // Log audit event
+        await logAuditEvent(req.app.locals.db, req.admin.id, 'merchant_updated', 'merchant', id, { domain, admin_override });
+
+        res.json({ merchant: result.rows[0] });
+    } catch (error) {
+        console.error('Update merchant error:', error);
+        res.status(500).json({ error: 'Failed to update merchant' });
+    }
+});
+
+// GET /admin/tenants - List all tenants
+router.get('/tenants', requireAuth, async (req, res) => {
+    try {
+        const { search, status, limit = 50, offset = 0 } = req.query;
+
+        let query = `
+            SELECT t.*,
+                   COUNT(m.id) as merchant_count
+            FROM tenants t
+            LEFT JOIN merchants m ON m.tenant_id = t.id
+            WHERE 1=1
+        `;
+
+        const params = [];
+        let paramIndex = 1;
+
+        if (search) {
+            query += ` AND (t.domain ILIKE $${paramIndex} OR t.name ILIKE $${paramIndex})`;
+            params.push(`%${search}%`);
+            paramIndex++;
+        }
+
+        if (status) {
+            query += ` AND t.status = $${paramIndex}`;
+            params.push(status);
+            paramIndex++;
+        }
+
+        query += ` GROUP BY t.id ORDER BY t.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+        params.push(parseInt(limit), parseInt(offset));
+
+        const result = await req.app.locals.db.query(query, params);
+
+        res.json({
+            tenants: result.rows,
+            count: result.rows.length
+        });
+    } catch (error) {
+        console.error('List tenants error:', error);
+        res.status(500).json({ error: 'Failed to list tenants' });
+    }
+});
+
+// POST /admin/tenants - Create new tenant
+router.post('/tenants', requireAuth, async (req, res) => {
+    try {
+        const { domain, name, status = 'active', branding = {} } = req.body;
+
+        if (!domain || !name) {
+            return res.status(400).json({ error: 'domain and name are required' });
+        }
+
+        const normalizedDomain = domain.toLowerCase().trim();
+
+        // Validate
+        if (name.length < 2 || name.length > 100) {
+            return res.status(400).json({ error: 'Name must be 2-100 characters' });
+        }
+
+        if (!['active', 'suspended'].includes(status)) {
+            return res.status(400).json({ error: 'Invalid status' });
+        }
+
+        // Check uniqueness
+        const existing = await req.app.locals.db.query(
+            'SELECT id FROM tenants WHERE domain = $1',
+            [normalizedDomain]
+        );
+
+        if (existing.rows.length > 0) {
+            return res.status(409).json({ error: 'Domain already exists' });
+        }
+
+        const result = await req.app.locals.db.query(`
+            INSERT INTO tenants (domain, name, status, branding)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *
+        `, [normalizedDomain, name, status, JSON.stringify(branding)]);
+
+        const tenant = result.rows[0];
+
+        // Log audit event
+        await logAuditEvent(req.app.locals.db, req.admin.id, 'tenant_created', 'tenant', tenant.id, { domain: normalizedDomain, name });
+
+        res.status(201).json({ tenant });
+    } catch (error) {
+        console.error('Create tenant error:', error);
+        res.status(500).json({ error: 'Failed to create tenant' });
+    }
+});
+
+// GET /admin/tenants/:id - Get tenant details
+router.get('/tenants/:id', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const result = await req.app.locals.db.query(`
+            SELECT t.*,
+                   COUNT(m.id) as merchant_count
+            FROM tenants t
+            LEFT JOIN merchants m ON m.tenant_id = t.id
+            WHERE t.id = $1
+            GROUP BY t.id
+        `, [id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Tenant not found' });
+        }
+
+        res.json({ tenant: result.rows[0] });
+    } catch (error) {
+        console.error('Get tenant error:', error);
+        res.status(500).json({ error: 'Failed to get tenant' });
+    }
+});
+
+// PATCH /admin/tenants/:id - Update tenant
+router.patch('/tenants/:id', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, status, branding } = req.body;
+
+        const updates = [];
+        const params = [id];
+        let paramIndex = 2;
+
+        if (name !== undefined) {
+            if (name.length < 2 || name.length > 100) {
+                return res.status(400).json({ error: 'Name must be 2-100 characters' });
+            }
+            updates.push(`name = $${paramIndex}`);
+            params.push(name);
+            paramIndex++;
+        }
+
+        if (status !== undefined) {
+            if (!['active', 'suspended'].includes(status)) {
+                return res.status(400).json({ error: 'Invalid status' });
+            }
+            updates.push(`status = $${paramIndex}`);
+            params.push(status);
+            paramIndex++;
+        }
+
+        if (branding !== undefined) {
+            updates.push(`branding = $${paramIndex}`);
+            params.push(JSON.stringify(branding));
+            paramIndex++;
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No fields to update' });
+        }
+
+        updates.push('updated_at = NOW()');
+
+        const query = `UPDATE tenants SET ${updates.join(', ')} WHERE id = $1 RETURNING *`;
+        const result = await req.app.locals.db.query(query, params);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Tenant not found' });
+        }
+
+        // Log audit event
+        await logAuditEvent(req.app.locals.db, req.admin.id, 'tenant_updated', 'tenant', id, { name, status, branding });
+
+        res.json({ tenant: result.rows[0] });
+    } catch (error) {
+        console.error('Update tenant error:', error);
+        res.status(500).json({ error: 'Failed to update tenant' });
+    }
+});
+
+// DELETE /admin/tenants/:id - Delete tenant
+router.delete('/tenants/:id', requireSuperAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Check for merchants
+        const merchantCheck = await req.app.locals.db.query(
+            'SELECT COUNT(*) as count FROM merchants WHERE tenant_id = $1',
+            [id]
+        );
+
+        if (parseInt(merchantCheck.rows[0].count) > 0) {
+            return res.status(400).json({ error: 'Cannot delete tenant with active merchants' });
+        }
+
+        const result = await req.app.locals.db.query(
+            'DELETE FROM tenants WHERE id = $1 RETURNING domain',
+            [id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Tenant not found' });
+        }
+
+        // Log audit event
+        await logAuditEvent(req.app.locals.db, req.admin.id, 'tenant_deleted', 'tenant', id, { domain: result.rows[0].domain });
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Delete tenant error:', error);
+        res.status(500).json({ error: 'Failed to delete tenant' });
+    }
+});
+
+// PATCH /admin/tenants/:id/status - Toggle tenant status
+router.patch('/tenants/:id/status', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!['active', 'suspended'].includes(status)) {
+            return res.status(400).json({ error: 'Invalid status' });
+        }
+
+        const result = await req.app.locals.db.query(
+            'UPDATE tenants SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+            [status, id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Tenant not found' });
+        }
+
+        // Log audit event
+        const action = status === 'active' ? 'tenant_activated' : 'tenant_suspended';
+        await logAuditEvent(req.app.locals.db, req.admin.id, action, 'tenant', id, { status });
+
+        res.json({ tenant: result.rows[0] });
+    } catch (error) {
+        console.error('Update tenant status error:', error);
+        res.status(500).json({ error: 'Failed to update tenant status' });
+    }
+});
+
+// Helper function for audit logging
+async function logAuditEvent(db, adminId, action, resourceType, resourceId, details = {}) {
+    try {
+        await db.query(`
+            INSERT INTO audit_logs (admin_id, action, resource_type, resource_id, details, created_at)
+            VALUES ($1, $2, $3, $4, $5, NOW())
+        `, [adminId, action, resourceType, resourceId, JSON.stringify(details)]);
+    } catch (error) {
+        console.warn('Audit log insert failed:', error.message);
+    }
+}
+
 module.exports = router;

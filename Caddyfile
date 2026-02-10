@@ -13,6 +13,12 @@
         reverse_proxy api:3000
     }
 
+    # Route /admin-ui/* requests to admin dashboard (development)
+    handle /admin-ui/* {
+        uri strip_prefix /admin-ui
+        reverse_proxy admin:5173
+    }
+
     # Route /internal/* requests to backend API (internal routes)
     handle /internal/* {
         reverse_proxy api:3000
@@ -52,6 +58,6 @@
 # }
 #
 # admin.ucpready.io {
-#     # Admin dashboard (when implemented)
+#     # Admin dashboard
 #     reverse_proxy admin:5173
 # }

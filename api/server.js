@@ -9,6 +9,7 @@ const { createClient } = require('redis');
 // Import routes
 const publicRoutes = require('./routes/public');
 const adminRoutes = require('./routes/admin');
+const adminExtendedRoutes = require('./routes/admin-extended');
 const webhookRoutes = require('./routes/webhooks');
 const internalRoutes = require('./routes/internal');
 const seoRoutes = require('./routes/seo');
@@ -90,6 +91,7 @@ app.use('/api/billing', resolveTenant, billingRoutes);
 
 // Admin routes (no tenant resolution, JWT auth)
 app.use('/admin', adminRoutes);
+app.use('/admin', adminExtendedRoutes);
 
 // Webhook routes (signature verification)
 app.use('/api/webhooks', resolveTenant, webhookRoutes);
