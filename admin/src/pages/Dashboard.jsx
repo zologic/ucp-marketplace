@@ -78,45 +78,85 @@ function Dashboard() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Dashboard</h1>
+        <h1 className="page-title">
+          <i className="fas fa-gauge-high"></i>
+          Dashboard
+        </h1>
         <p className="page-description">Overview of UCP Marketplace performance</p>
       </div>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-4 gap-16 mb-lg">
         <div className="stat-card">
-          <div className="stat-card-label">Active Merchants</div>
-          <div className="stat-card-value">{stats?.active_merchants || 0}</div>
+          <div className="stat-card-header">
+            <span className="stat-label">Active Merchants</span>
+            <div className="stat-icon">
+              <i className="fas fa-shop"></i>
+            </div>
+          </div>
+          <div className="stat-value">{stats?.active_merchants || 0}</div>
+        </div>
+
+        <div className="stat-card stat-info">
+          <div className="stat-card-header">
+            <span className="stat-label">Total Tenants</span>
+            <div className="stat-icon">
+              <i className="fas fa-building-user"></i>
+            </div>
+          </div>
+          <div className="stat-value">{stats?.total_tenants || 0}</div>
+        </div>
+
+        <div className="stat-card stat-warning">
+          <div className="stat-card-header">
+            <span className="stat-label">Revenue MTD</span>
+            <div className="stat-icon">
+              <i className="fas fa-euro-sign"></i>
+            </div>
+          </div>
+          <div className="stat-value">{formatCurrency(revenueMTD)}</div>
+          <div className="stat-change text-muted">
+            <small>Total merchant sales</small>
+          </div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-card-label">Total Tenants</div>
-          <div className="stat-card-value">{stats?.total_tenants || 0}</div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-card-label">Revenue MTD</div>
-          <div className="stat-card-value">{formatCurrency(revenueMTD)}</div>
-          <div className="stat-card-change text-muted">Total merchant sales</div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-card-label">Estimated Commission (5%)</div>
-          <div className="stat-card-value text-success">{formatCurrency(commissionMTD)}</div>
-          <div className="stat-card-change text-muted">Our earnings MTD</div>
+          <div className="stat-card-header">
+            <span className="stat-label">Commission (5%)</span>
+            <div className="stat-icon">
+              <i className="fas fa-sack-dollar"></i>
+            </div>
+          </div>
+          <div className="stat-value text-success">{formatCurrency(commissionMTD)}</div>
+          <div className="stat-change positive">
+            <i className="fas fa-arrow-up"></i>
+            <small>Our earnings MTD</small>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-16 mb-lg">
-        <div className="stat-card">
-          <div className="stat-card-label">Searches Today</div>
-          <div className="stat-card-value">{stats?.searches_today || 0}</div>
+        <div className="stat-card stat-info">
+          <div className="stat-card-header">
+            <span className="stat-label">Searches Today</span>
+            <div className="stat-icon">
+              <i className="fas fa-magnifying-glass"></i>
+            </div>
+          </div>
+          <div className="stat-value">{stats?.searches_today || 0}</div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-card-label">Referral Conversions Today</div>
-          <div className="stat-card-value">{stats?.conversions_today || 0}</div>
-          <div className="stat-card-change text-muted">From checkout sessions</div>
+          <div className="stat-card-header">
+            <span className="stat-label">Conversions Today</span>
+            <div className="stat-icon">
+              <i className="fas fa-cart-shopping"></i>
+            </div>
+          </div>
+          <div className="stat-value">{stats?.conversions_today || 0}</div>
+          <div className="stat-change text-muted">
+            <small>From checkout sessions</small>
+          </div>
         </div>
       </div>
 
@@ -125,7 +165,10 @@ function Dashboard() {
         <div className="grid grid-cols-2 gap-16">
           <div className="card">
             <div className="card-header">
-              <h3 className="card-title">Searches (Last 7 Days)</h3>
+              <h3 className="card-title">
+                <i className="fas fa-chart-line"></i>
+                Searches (Last 7 Days)
+              </h3>
             </div>
             <div className="card-body">
               <Line
@@ -134,8 +177,8 @@ function Dashboard() {
                   datasets: [{
                     label: 'Searches',
                     data: stats.trends.searches || [],
-                    borderColor: '#2563eb',
-                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                    borderColor: '#3fb950',
+                    backgroundColor: 'rgba(63, 185, 80, 0.1)',
                     tension: 0.4
                   }]
                 }}
@@ -143,6 +186,16 @@ function Dashboard() {
                   responsive: true,
                   plugins: {
                     legend: { display: false }
+                  },
+                  scales: {
+                    y: {
+                      grid: { color: '#30363d' },
+                      ticks: { color: '#8b949e' }
+                    },
+                    x: {
+                      grid: { color: '#30363d' },
+                      ticks: { color: '#8b949e' }
+                    }
                   }
                 }}
               />
