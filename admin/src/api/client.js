@@ -30,7 +30,7 @@ apiClient.interceptors.response.use(
       // Token expired or invalid - clear auth and redirect to login
       localStorage.removeItem('admin_token');
       localStorage.removeItem('admin_user');
-      window.location.href = '/login';
+      window.location.href = '/admin-ui/login';
     }
     return Promise.reject(error);
   }
@@ -48,7 +48,7 @@ export const login = async (email, password) => {
 export const logout = () => {
   localStorage.removeItem('admin_token');
   localStorage.removeItem('admin_user');
-  window.location.href = '/login';
+  window.location.href = '/admin-ui/login';
 };
 
 export const getCurrentUser = () => {
