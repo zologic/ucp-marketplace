@@ -97,15 +97,26 @@ async function indexProducts(db) {
                             (product.description ? product.description.substring(0, 150) + (product.description.length > 150 ? '...' : '') : null);
                         const descriptionLong = product.description_long || product.description || null;
 
-                        // Process variations field
+                        // Process variations field - Support UCP 2026 format
                         let variations = [];
                         let hasVariations = false;
 
                         if (product.variations && Array.isArray(product.variations) && product.variations.length > 0) {
                             try {
-                                // Validate variation structure
-                                variations = product.variations.filter(v => v.attribute && Array.isArray(v.options));
-                                hasVariations = variations.length > 0;
+                                // Check if UCP 2026 format (array of items with id, title, price, attributes)
+                                const isUCP2026Format = product.variations[0] &&
+                                    product.variations[0].id &&
+                                    product.variations[0].attributes;
+
+                                if (isUCP2026Format) {
+                                    // Transform UCP 2026 format to internal format
+                                    variations = transformUCP2026Variations(product.variations, product.price_cents || 0);
+                                    hasVariations = variations.length > 0;
+                                } else {
+                                    // Legacy format: array with {attribute, options}
+                                    variations = product.variations.filter(v => v.attribute && Array.isArray(v.options));
+                                    hasVariations = variations.length > 0;
+                                }
                             } catch (varError) {
                                 console.warn(`[indexProducts] Invalid variations for product ${product.id}:`, varError.message);
                                 variations = [];
@@ -269,6 +280,66 @@ function getErrorCode(error) {
     if (error.response && error.response.status === 429) return 'RATE_LIMITED';
     if (error.name === 'UcpParseError' || error.name === 'UcpValidationError') return 'INVALID_MANIFEST';
     return 'UNKNOWN_ERROR';
+}
+
+/**
+ * Transform UCP 2026 variations format to internal marketplace format
+ *
+ * UCP 2026 Input:
+ * [
+ *   {id: "shoe-123-blue-10", title: "Blue / Size 10", price: 12000, attributes: {color: "Blue", size: "10"}},
+ *   {id: "shoe-123-red-10", title: "Red / Size 10", price: 12500, attributes: {color: "Red", size: "10"}}
+ * ]
+ *
+ * Internal Output:
+ * [
+ *   {
+ *     attribute: "color",
+ *     options: [
+ *       {value: "Blue", available: true, price_modifier_cents: 0, variation_id: "shoe-123-blue-10"},
+ *       {value: "Red", available: true, price_modifier_cents: 500, variation_id: "shoe-123-red-10"}
+ *     ]
+ *   },
+ *   {attribute: "size", options: [{value: "10", ...}]}
+ * ]
+ */
+function transformUCP2026Variations(ucpVariations, basePrice) {
+    const attributeGroups = {};
+
+    for (const variation of ucpVariations) {
+        if (!variation.attributes) continue;
+
+        const variationPrice = variation.price || basePrice;
+        const priceModifier = variationPrice - basePrice;
+
+        // Extract each attribute (color, size, etc.)
+        for (const [attrKey, attrValue] of Object.entries(variation.attributes)) {
+            if (!attributeGroups[attrKey]) {
+                attributeGroups[attrKey] = {
+                    attribute: attrKey,
+                    options: []
+                };
+            }
+
+            // Check if this option already exists
+            const existingOption = attributeGroups[attrKey].options.find(opt => opt.value === attrValue);
+
+            if (!existingOption) {
+                attributeGroups[attrKey].options.push({
+                    value: String(attrValue),
+                    available: variation.stock_status !== 'out_of_stock',
+                    price_modifier_cents: priceModifier,
+                    variation_id: variation.id // Store UCP variation ID for checkout
+                });
+            }
+        }
+    }
+
+    // Convert to array and capitalize attribute names
+    return Object.values(attributeGroups).map(group => ({
+        attribute: group.attribute.charAt(0).toUpperCase() + group.attribute.slice(1),
+        options: group.options
+    }));
 }
 
 module.exports = { indexProducts };
