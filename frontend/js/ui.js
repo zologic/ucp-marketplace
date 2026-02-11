@@ -5,6 +5,9 @@
 
 import { handleCheckout } from './checkout.js';
 
+// Auto-reset timer reference
+let autoResetTimer = null;
+
 /**
  * Render search results
  * @param {Array} products - Array of product objects
@@ -12,14 +15,56 @@ import { handleCheckout } from './checkout.js';
 export function renderResults(products) {
     const container = document.getElementById('results-container');
     const section = document.getElementById('results-section');
+    const clearButton = document.getElementById('clear-button');
+
+    // Clear any existing auto-reset timer
+    if (autoResetTimer) {
+        clearTimeout(autoResetTimer);
+        autoResetTimer = null;
+    }
 
     container.innerHTML = '';
 
     if (products.length === 0) {
         container.innerHTML = '<p class="no-results">No results found. Try a different search.</p>';
         section.classList.remove('hidden');
+
+        // Show clear button when results are displayed (even if "No results")
+        if (clearButton) {
+            clearButton.classList.remove('hidden');
+        }
+
+        // Morph Search button to Clear button
+        window.dispatchEvent(new CustomEvent('morphButtonToClear'));
+
+        // Start 5-second auto-reset timer
+        autoResetTimer = setTimeout(() => {
+            // Clear input
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) {
+                searchInput.value = '';
+            }
+
+            // Hide clear button
+            if (clearButton) {
+                clearButton.classList.add('hidden');
+            }
+
+            // Trigger reset animation (center pill, hide results)
+            const event = new CustomEvent('resetSearchState');
+            window.dispatchEvent(event);
+        }, 5000);
+
         return;
     }
+
+    // Show clear button when results are displayed
+    if (clearButton) {
+        clearButton.classList.remove('hidden');
+    }
+
+    // Morph Search button to Clear button
+    window.dispatchEvent(new CustomEvent('morphButtonToClear'));
 
     products.forEach(product => {
         const card = createProductCard(product);
