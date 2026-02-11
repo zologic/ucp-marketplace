@@ -353,14 +353,30 @@ router.post('/merchants/:id/recrawl', requireAuth, async (req, res) => {
         const response = await axios.get(productsUrl, { timeout: 30000 });
         const productsData = response.data;
 
+        console.log(`[Recrawl] Response type: ${typeof productsData}, isArray: ${Array.isArray(productsData)}`);
+        console.log(`[Recrawl] Response keys: ${typeof productsData === 'object' ? Object.keys(productsData).join(', ') : 'N/A'}`);
+
         // Extract products array (handle different response formats)
         let products = [];
         if (Array.isArray(productsData)) {
+            // Format 1: Direct array
             products = productsData;
         } else if (productsData.products && Array.isArray(productsData.products)) {
+            // Format 2: Wrapped in products field
             products = productsData.products;
+        } else if (productsData.data && Array.isArray(productsData.data)) {
+            // Format 3: Wrapped in data field
+            products = productsData.data;
+        } else if (productsData.items && Array.isArray(productsData.items)) {
+            // Format 4: Wrapped in items field
+            products = productsData.items;
         } else {
-            return res.status(400).json({ error: 'Invalid products response format' });
+            console.error('[Recrawl] Unrecognized response format:', JSON.stringify(productsData).substring(0, 500));
+            return res.status(400).json({
+                error: 'Invalid products response format',
+                details: `Expected array or object with products/data/items field. Got: ${typeof productsData}`,
+                sample_keys: typeof productsData === 'object' ? Object.keys(productsData) : null
+            });
         }
 
         console.log(`[Recrawl] Found ${products.length} products`);
