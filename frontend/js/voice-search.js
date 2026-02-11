@@ -52,14 +52,18 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
         rec.maxAlternatives = 1;
 
         rec.onstart = () => {
-            console.log('Speech recognition started');
+            console.log('Speech recognition started successfully');
             isListening = true;
+
+            // ANDROID: Confirm to user that mic is active
+            updateStatusText('🎤 Listening...');
         };
 
         rec.onresult = (event) => {
             let interimTranscript = '';
             let newFinalTranscript = '';
 
+            // Process all results from this event
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 const transcript = event.results[i][0].transcript;
                 if (event.results[i].isFinal) {
@@ -69,34 +73,50 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
                 }
             }
 
-            // Update final transcript
+            // Update final transcript accumulator
             if (newFinalTranscript) {
                 finalTranscript += newFinalTranscript;
+                console.log('Final transcript:', finalTranscript);
             }
 
-            // Update input with current transcript
+            // Build complete current transcript
             const currentTranscript = finalTranscript + interimTranscript;
-            if (currentTranscript) {
-                searchInput.value = currentTranscript;
 
-                // Add transcribing class for interim results
-                if (interimTranscript) {
-                    searchInput.classList.add('transcribing');
-                } else {
-                    searchInput.classList.remove('transcribing');
-                }
+            // ANDROID FIX: Always update input immediately, even with empty transcript
+            // to show that speech recognition is working
+            searchInput.value = currentTranscript;
 
-                // Call transcript callback
-                if (onTranscript) {
-                    onTranscript(currentTranscript);
-                }
+            // Visual feedback for interim vs final results
+            if (interimTranscript) {
+                searchInput.classList.add('transcribing');
+                // Show interim text in status for Android feedback
+                updateStatusText('Listening: "' + currentTranscript + '"');
+            } else if (newFinalTranscript) {
+                searchInput.classList.remove('transcribing');
+                updateStatusText('');
+            }
+
+            // Call transcript callback for any text
+            if (currentTranscript && onTranscript) {
+                onTranscript(currentTranscript);
+            }
+
+            // ANDROID: Log to help debug
+            if (interimTranscript || newFinalTranscript) {
+                console.log('Voice result:', {
+                    interim: interimTranscript,
+                    final: newFinalTranscript,
+                    total: currentTranscript
+                });
             }
         };
 
         rec.onerror = (event) => {
-            console.error('Speech recognition error:', event.error);
+            console.error('Speech recognition error:', event.error, event);
 
             let errorMessage = '';
+            let shouldHideMic = false;
+
             switch (event.error) {
                 case 'no-speech':
                     errorMessage = 'No speech detected. Please try again.';
@@ -105,25 +125,35 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
                     errorMessage = 'No microphone found. Please check your device.';
                     break;
                 case 'not-allowed':
-                    errorMessage = 'Microphone access denied. Please enable in browser settings.';
-                    // Hide mic button if permission denied
-                    if (micButton) {
-                        micButton.style.display = 'none';
-                    }
+                    errorMessage = 'Microphone blocked. Enable in browser settings.';
+                    shouldHideMic = true;
+                    console.error('ANDROID: Microphone permission denied or user activation lost');
                     break;
                 case 'network':
-                    errorMessage = 'Network error. Please check connection and try again.';
+                    errorMessage = 'Network error. Check connection and try again.';
+                    break;
+                case 'service-not-allowed':
+                    errorMessage = 'Speech service not available. Try again.';
+                    console.error('ANDROID: Speech service rejected - may be user activation issue');
                     break;
                 case 'aborted':
-                    // Don't show error for manual abort
+                    // Manual abort - no error message needed
+                    console.log('Speech recognition manually aborted');
                     break;
                 default:
                     errorMessage = 'Voice search failed. Please try again.';
+                    console.error('ANDROID: Unknown error -', event.error);
             }
 
+            // Show error message to user
             if (errorMessage) {
-                updateStatusText(errorMessage);
-                setTimeout(() => updateStatusText(''), 3000);
+                updateStatusText('⚠️ ' + errorMessage);
+                setTimeout(() => updateStatusText(''), 4000);
+            }
+
+            // Hide mic button only for permanent permission denial
+            if (shouldHideMic && micButton) {
+                micButton.style.display = 'none';
             }
 
             resetUIToIdle();
@@ -152,19 +182,27 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
 
     /**
      * Start recording
+     * CRITICAL: recognition.start() must be called immediately for Android
      */
     function startRecording() {
         try {
             finalTranscript = '';
             recognition = createRecognition();
+
+            // CRITICAL FOR ANDROID: Start recognition immediately in user gesture
+            // Any delay breaks Android's user activation requirement
             recognition.start();
 
+            // UI updates can happen after start() is called
             showVoiceWaves();
             setSearchPillActive(true);
             micButton.classList.add('active');
+            micButton.classList.add('recording');
 
         } catch (error) {
             console.error('Failed to start recognition:', error);
+            updateStatusText('Voice search failed. Please try again.');
+            setTimeout(() => updateStatusText(''), 3000);
             resetUIToIdle();
         }
     }
@@ -183,12 +221,13 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
      * UI state functions
      */
     function showVoiceWaves() {
-        if (micIcon) micIcon.style.display = 'none';
+        // ANDROID FIX: Keep mic icon visible, just add pulsing animation via CSS
+        // Don't hide the icon - it provides visual feedback that mic is active
+        // The CSS .mic-button.active class handles the visual state
         if (voiceWaves) voiceWaves.classList.remove('hidden');
     }
 
     function hideVoiceWaves() {
-        if (micIcon) micIcon.style.display = 'block';
         if (voiceWaves) voiceWaves.classList.add('hidden');
     }
 
@@ -219,11 +258,16 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
         hideVoiceWaves();
         setSearchPillActive(false);
         setSearchPillPulsing(false);
-        micButton.classList.remove('active', 'toggle-mode');
+        micButton.classList.remove('active', 'toggle-mode', 'recording');
         searchInput.classList.remove('transcribing');
         updateStatusText('');
         mode = null;
         isListening = false;
+
+        // Ensure mic icon is visible after reset
+        if (micIcon) {
+            micIcon.style.removeProperty('display');
+        }
     }
 
     /**
