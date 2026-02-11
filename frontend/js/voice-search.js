@@ -21,13 +21,21 @@ if (!SpeechRecognition) {
  * @returns {Object|null} Voice search controller or null if not supported
  */
 export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript, onComplete) {
+    console.log('=== Initializing Voice Search ===');
+    console.log('SpeechRecognition available:', !!SpeechRecognition);
+    console.log('webkitSpeechRecognition available:', !!window.webkitSpeechRecognition);
+    console.log('User agent:', navigator.userAgent);
+
     if (!SpeechRecognition) {
+        console.error('Web Speech API not supported');
         // Hide mic button if Web Speech API not supported
         if (micButton) {
             micButton.style.display = 'none';
         }
         return null;
     }
+
+    console.log('Voice search initialized successfully');
 
     // Detect Android
     const isAndroid = /Android/i.test(navigator.userAgent);
@@ -60,8 +68,7 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
         rec.maxAlternatives = 1;
 
         rec.onstart = () => {
-            console.log('Speech recognition started successfully');
-            isListening = true;
+            console.log('✓ Speech recognition ONSTART fired');
             recognitionStartTime = Date.now(); // Track start time
 
             // ANDROID: Confirm to user that mic is active
@@ -71,7 +78,7 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
         rec.onresult = (event) => {
             // Simple single-shot mode - just get the final result
             const transcript = event.results[0][0].transcript;
-            console.log('Voice result:', transcript);
+            console.log('✓ ONRESULT fired with transcript:', transcript);
 
             // Update input with transcript
             searchInput.value = transcript;
@@ -79,12 +86,14 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
 
             // Call transcript callback
             if (transcript && onTranscript) {
+                console.log('Calling onTranscript callback');
                 onTranscript(transcript);
             }
         };
 
         rec.onerror = (event) => {
-            console.error('Speech recognition error:', event.error, event);
+            console.error('✗ ONERROR fired:', event.error, event);
+            console.error('Error details - isButtonHeld:', isButtonHeld, 'restartAttempts:', restartAttempts);
 
             let errorMessage = '';
 
@@ -135,24 +144,26 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
 
         rec.onend = () => {
             const recognitionDuration = Date.now() - recognitionStartTime;
-            console.log('Speech recognition ended', { duration: recognitionDuration + 'ms' });
+            console.log('✓ ONEND fired - duration:', recognitionDuration + 'ms', 'isButtonHeld:', isButtonHeld, 'restartAttempts:', restartAttempts);
 
             // Get current transcript
             const transcript = searchInput.value.trim();
+            console.log('Current transcript:', transcript);
 
             // If button still held, restart for continuous recording
             if (isButtonHeld && restartAttempts < 10) {
-                console.log('Button still held, restarting recognition (attempt', restartAttempts + 1, ')');
+                console.log('→ Button still held, restarting recognition (attempt', restartAttempts + 1, ')');
                 restartAttempts++;
 
                 // Restart recognition immediately
                 try {
                     recognition = createRecognition();
                     recognition.start();
+                    console.log('→ Restart successful');
                     // Keep UI in recording state - don't reset
                     return;
                 } catch (error) {
-                    console.error('Failed to restart recognition:', error);
+                    console.error('→ Restart failed:', error);
                     // Fall through to normal cleanup
                 }
             }
@@ -162,11 +173,14 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
 
             // Trigger search if we have transcript
             if (transcript && onComplete) {
-                console.log('Triggering search with transcript:', transcript);
+                console.log('→ Triggering search with transcript:', transcript);
                 searchInput.classList.remove('transcribing');
                 onComplete(transcript);
+            } else {
+                console.log('→ No transcript to search, or no onComplete callback');
             }
 
+            console.log('→ Cleaning up and resetting UI');
             isListening = false;
             isButtonHeld = false;
             resetUIToIdle();
@@ -247,20 +261,35 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
      * CRITICAL: recognition.start() must be ABSOLUTE FIRST for Android User Activation
      */
     function handlePointerDown(e) {
+        console.log('handlePointerDown triggered');
         e.preventDefault();
 
         // Early exit if already listening
-        if (isListening) return;
+        if (isListening) {
+            console.log('Already listening, ignoring');
+            return;
+        }
 
         // Create recognition object
+        console.log('Creating recognition object');
         finalTranscript = '';
         recognition = createRecognition();
 
+        if (!recognition) {
+            console.error('Failed to create recognition object');
+            updateStatusText('Voice search not available');
+            return;
+        }
+
         // CRITICAL: START IMMEDIATELY - must be first synchronous operation
+        console.log('Attempting to start recognition...');
         try {
             recognition.start();
+            console.log('Recognition.start() called successfully');
         } catch (error) {
             console.error('Failed to start recognition:', error);
+            updateStatusText('Failed to start voice search: ' + error.message);
+            setTimeout(() => updateStatusText(''), 3000);
             return;
         }
 
@@ -269,33 +298,40 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
         restartAttempts = 0;
         pressStartTime = Date.now();
         isListening = true;
+        console.log('State updated, isListening:', isListening, 'isButtonHeld:', isButtonHeld);
 
         // UI updates AFTER start() is called
         showVoiceWaves();
         setSearchPillActive(true);
         micButton.classList.add('active');
         micButton.classList.add('recording');
+        console.log('UI updated');
     }
 
     /**
      * Handle pointer up (release press)
      */
     function handlePointerUp(e) {
+        console.log('handlePointerUp triggered');
         e.preventDefault();
 
         // Mark button as released
         isButtonHeld = false;
+        console.log('Button released, isButtonHeld:', isButtonHeld);
 
         const pressDuration = Date.now() - pressStartTime;
+        console.log('Press duration:', pressDuration + 'ms');
 
         // Ignore very rapid taps (<100ms) as accidental
         if (pressDuration < 100) {
+            console.log('Too short press, ignoring');
             stopRecording();
             resetUIToIdle();
             return;
         }
 
         // Always stop recording on release - onend will trigger search
+        console.log('Stopping recording');
         stopRecording();
     }
 
