@@ -315,10 +315,14 @@ function Merchants() {
     <div>
       <div className="page-header flex justify-between items-center">
         <div>
-          <h1 className="page-title">Merchants</h1>
+          <h1 className="page-title">
+            <i className="fas fa-shop"></i>
+            Merchants
+          </h1>
           <p className="page-description">Manage merchant registrations and UCP verification</p>
         </div>
         <Button variant="primary" onClick={openAddModal}>
+          <i className="fas fa-plus"></i>
           Add New Merchant
         </Button>
       </div>
@@ -366,6 +370,7 @@ function Merchants() {
           </div>
           <div className="filter-group flex items-end">
             <Button type="submit" variant="primary">
+              <i className="fas fa-magnifying-glass"></i>
               Search
             </Button>
           </div>
