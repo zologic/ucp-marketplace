@@ -9,6 +9,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const { requireAuth, requireSuperAdmin } = require('../middleware/auth');
+const { parseUcpManifest } = require('../utils/ucpParser');
 
 const JWT_SECRET = process.env.ADMIN_JWT_SECRET;
 
@@ -342,8 +343,10 @@ async function verifyMerchantUCP(merchantId, db) {
         const response = await axios.get(ucpEndpoint, { timeout: 10000 });
         const manifest = response.data;
 
-        // Validate structure
-        if (!manifest.products_endpoint || !manifest.checkout_endpoint || !manifest.public_key) {
+        // Parse and validate manifest using new UCP schema
+        const parseResult = parseUcpManifest(manifest);
+
+        if (!parseResult.isValid) {
             await db.query(
                 'UPDATE merchants SET status = $1, last_verified_at = NOW() WHERE id = $2',
                 ['pending', merchantId]
@@ -351,21 +354,58 @@ async function verifyMerchantUCP(merchantId, db) {
 
             return {
                 status: 'failed',
-                error: 'Invalid UCP manifest structure'
+                error: parseResult.error
             };
         }
 
-        // Update merchant with UCP info
+        // Extract parsed data
+        const {
+            businessName,
+            businessUrl,
+            businessDescription,
+            contactEmail,
+            serviceBaseUrl,
+            publicKey,
+            signingKeyId,
+            fullManifest
+        } = parseResult.data;
+
+        // Update merchant with all UCP info
         await db.query(`
             UPDATE merchants
-            SET ucp_endpoint = $1, public_key = $2, status = $3, last_verified_at = NOW()
-            WHERE id = $4
-        `, [ucpEndpoint, manifest.public_key, 'verified', merchantId]);
+            SET ucp_endpoint = $1,
+                public_key = $2,
+                signing_key_id = $3,
+                service_base_url = $4,
+                business_name = $5,
+                business_description = $6,
+                business_url = $7,
+                contact_email = $8,
+                ucp_manifest = $9,
+                status = $10,
+                last_verified_at = NOW()
+            WHERE id = $11
+        `, [
+            ucpEndpoint,
+            publicKey,
+            signingKeyId,
+            serviceBaseUrl,
+            businessName,
+            businessDescription,
+            businessUrl,
+            contactEmail,
+            JSON.stringify(fullManifest),
+            'verified',
+            merchantId
+        ]);
 
         return {
             status: 'verified',
             ucp_endpoint: ucpEndpoint,
-            public_key: manifest.public_key,
+            public_key: publicKey,
+            signing_key_id: signingKeyId,
+            service_base_url: serviceBaseUrl,
+            business_name: businessName,
             verified_at: new Date().toISOString()
         };
     } catch (error) {
@@ -378,7 +418,9 @@ async function verifyMerchantUCP(merchantId, db) {
 
         return {
             status: 'failed',
-            error: error.message
+            error: error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND'
+                ? 'UCP endpoint not reachable'
+                : error.message
         };
     }
 }

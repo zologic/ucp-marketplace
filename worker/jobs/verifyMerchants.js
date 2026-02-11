@@ -4,6 +4,7 @@
  */
 
 const axios = require('axios');
+const { parseUcpManifest } = require('../../api/utils/ucpParser');
 
 async function verifyMerchants(db) {
     const startTime = Date.now();
@@ -42,19 +43,56 @@ async function verifyMerchants(db) {
 
                 const manifest = response.data;
 
-                // Validate structure
-                if (!manifest.products_endpoint || !manifest.checkout_endpoint || !manifest.public_key) {
-                    throw new Error('Invalid manifest structure');
+                // Parse and validate manifest using new UCP schema
+                const parseResult = parseUcpManifest(manifest);
+
+                if (!parseResult.isValid) {
+                    throw new Error(parseResult.error);
                 }
+
+                // Extract parsed data
+                const {
+                    businessName,
+                    businessUrl,
+                    businessDescription,
+                    contactEmail,
+                    serviceBaseUrl,
+                    publicKey,
+                    signingKeyId,
+                    fullManifest
+                } = parseResult.data;
 
                 // Update merchant as verified
                 const newStatus = merchant.status === 'pending' ? 'verified' : merchant.status;
 
                 await db.query(`
                     UPDATE merchants
-                    SET ucp_endpoint = $1, public_key = $2, status = $3, last_verified_at = NOW(), updated_at = NOW()
-                    WHERE id = $4
-                `, [ucpEndpoint, manifest.public_key, newStatus, merchant.id]);
+                    SET ucp_endpoint = $1,
+                        public_key = $2,
+                        signing_key_id = $3,
+                        service_base_url = $4,
+                        business_name = $5,
+                        business_description = $6,
+                        business_url = $7,
+                        contact_email = $8,
+                        ucp_manifest = $9,
+                        status = $10,
+                        last_verified_at = NOW(),
+                        updated_at = NOW()
+                    WHERE id = $11
+                `, [
+                    ucpEndpoint,
+                    publicKey,
+                    signingKeyId,
+                    serviceBaseUrl,
+                    businessName,
+                    businessDescription,
+                    businessUrl,
+                    contactEmail,
+                    JSON.stringify(fullManifest),
+                    newStatus,
+                    merchant.id
+                ]);
 
                 successCount++;
                 console.log(`[verifyMerchants] ✓ ${merchant.domain}`);
