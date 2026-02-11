@@ -53,15 +53,9 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
     function createRecognition() {
         const rec = new SpeechRecognition();
 
-        // Platform-specific configuration
-        if (isAndroid) {
-            rec.continuous = true;      // Don't auto-stop (critical for Android)
-            rec.interimResults = true;  // Show results while speaking
-        } else {
-            rec.continuous = false;     // Desktop can use single-shot
-            rec.interimResults = false;
-        }
-
+        // Recommended configuration for Android stability
+        rec.continuous = false;      // Prevents immediate stop on Android
+        rec.interimResults = false;  // Simpler, more stable on Android
         rec.lang = 'en-US';
         rec.maxAlternatives = 1;
 
@@ -75,70 +69,32 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
         };
 
         rec.onresult = (event) => {
-            let interimTranscript = '';
-            let newFinalTranscript = '';
+            // Simple single-shot mode - just get the final result
+            const transcript = event.results[0][0].transcript;
+            console.log('Voice result:', transcript);
 
-            // Process all results from this event
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const transcript = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
-                    newFinalTranscript += transcript;
-                } else {
-                    interimTranscript += transcript;
-                }
-            }
+            // Update input with transcript
+            searchInput.value = transcript;
+            finalTranscript = transcript;
 
-            // Update final transcript accumulator
-            if (newFinalTranscript) {
-                finalTranscript += newFinalTranscript;
-                console.log('Final transcript:', finalTranscript);
-            }
-
-            // Build complete current transcript
-            const currentTranscript = finalTranscript + interimTranscript;
-
-            // ANDROID FIX: Always update input immediately, even with empty transcript
-            // to show that speech recognition is working
-            searchInput.value = currentTranscript;
-
-            // Visual feedback for interim vs final results
-            if (interimTranscript) {
-                searchInput.classList.add('transcribing');
-                // Show interim text in status for Android feedback
-                updateStatusText('Listening: "' + currentTranscript + '"');
-            } else if (newFinalTranscript) {
-                searchInput.classList.remove('transcribing');
-                updateStatusText('');
-            }
-
-            // Call transcript callback for any text
-            if (currentTranscript && onTranscript) {
-                onTranscript(currentTranscript);
-            }
-
-            // ANDROID: Log to help debug
-            if (interimTranscript || newFinalTranscript) {
-                console.log('Voice result:', {
-                    interim: interimTranscript,
-                    final: newFinalTranscript,
-                    total: currentTranscript
-                });
+            // Call transcript callback
+            if (transcript && onTranscript) {
+                onTranscript(transcript);
             }
         };
 
         rec.onerror = (event) => {
             console.error('Speech recognition error:', event.error, event);
 
-            // Ignore "no-speech" on Android (expected behavior with continuous mode)
-            if (event.error === 'no-speech' && isAndroid) {
-                console.log('ANDROID: Ignoring no-speech error (expected with continuous mode)');
-                return;
-            }
-
             let errorMessage = '';
 
             switch (event.error) {
                 case 'no-speech':
+                    // Ignore on button hold - will auto-restart
+                    if (isButtonHeld) {
+                        console.log('No speech detected, will retry while button held');
+                        return;
+                    }
                     errorMessage = 'No speech detected. Please try again.';
                     break;
                 case 'audio-capture':
@@ -179,14 +135,14 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
 
         rec.onend = () => {
             const recognitionDuration = Date.now() - recognitionStartTime;
-            console.log('Speech recognition ended', { duration: recognitionDuration + 'ms', isButtonHeld, restartAttempts });
+            console.log('Speech recognition ended', { duration: recognitionDuration + 'ms' });
 
             // Get current transcript
             const transcript = searchInput.value.trim();
 
-            // ANDROID: Auto-restart if button still held (handles Android killing recognition)
-            if (isButtonHeld && isAndroid && restartAttempts < 5) {
-                console.warn('ANDROID: Button still held, restarting recognition (attempt', restartAttempts + 1, ')');
+            // If button still held, restart for continuous recording
+            if (isButtonHeld && restartAttempts < 10) {
+                console.log('Button still held, restarting recognition (attempt', restartAttempts + 1, ')');
                 restartAttempts++;
 
                 // Restart recognition immediately
@@ -204,45 +160,11 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
             // Reset restart attempts
             restartAttempts = 0;
 
-            // If recognition ended quickly but we have transcript, trigger search
-            if (recognitionDuration < 500 && isListening) {
-                console.warn('ANDROID: Recognition ended after', recognitionDuration, 'ms with transcript');
-
-                // If we have transcript, trigger search immediately
-                if (transcript && onComplete) {
-                    console.log('ANDROID: Triggering search with transcript:', transcript);
-                    searchInput.classList.remove('transcribing');
-                    onComplete(transcript);
-                    isListening = false;
-                    isButtonHeld = false;
-                    resetUIToIdle();
-                    return;
-                }
-
-                // No transcript yet - wait briefly for late arrival
-                setTimeout(() => {
-                    if (isListening) {
-                        const delayedTranscript = searchInput.value.trim();
-                        if (delayedTranscript && onComplete) {
-                            console.log('ANDROID: Late transcript found, triggering search');
-                            searchInput.classList.remove('transcribing');
-                            onComplete(delayedTranscript);
-                        }
-                        isListening = false;
-                        isButtonHeld = false;
-                        resetUIToIdle();
-                    }
-                }, 300);
-                return;
-            }
-
-            // Normal flow: trigger search if we have transcript
-            if (transcript) {
+            // Trigger search if we have transcript
+            if (transcript && onComplete) {
+                console.log('Triggering search with transcript:', transcript);
                 searchInput.classList.remove('transcribing');
-                if (onComplete) {
-                    console.log('Triggering search with transcript:', transcript);
-                    onComplete(transcript);
-                }
+                onComplete(transcript);
             }
 
             isListening = false;
