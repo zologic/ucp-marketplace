@@ -185,12 +185,27 @@ router.post('/merchants', requireAuth, async (req, res) => {
 
         const merchant = result.rows[0];
 
-        // Auto-verify if requested
+        // Auto-verify if requested (await to ensure it completes)
         if (auto_verify) {
-            // Trigger verification asynchronously (don't wait)
-            verifyMerchantUCP(merchant.id, req.app.locals.db).catch(err => {
+            try {
+                const verifyResult = await verifyMerchantUCP(merchant.id, req.app.locals.db);
+                // Return merchant with updated status and business_name
+                const updatedMerchant = await req.app.locals.db.query(
+                    'SELECT * FROM merchants WHERE id = $1',
+                    [merchant.id]
+                );
+                return res.status(201).json({
+                    merchant: updatedMerchant.rows[0],
+                    verification: verifyResult
+                });
+            } catch (err) {
                 console.error('Auto-verify failed:', err);
-            });
+                // Return merchant anyway but with verification error
+                return res.status(201).json({
+                    merchant,
+                    verification: { status: 'failed', error: err.message }
+                });
+            }
         }
 
         res.status(201).json({ merchant });
@@ -231,8 +246,9 @@ router.post('/merchants/:id/activate', requireAuth, async (req, res) => {
 
         const merchant = merchantResult.rows[0];
 
-        if (merchant.status !== 'verified') {
-            return res.status(400).json({ error: 'Merchant must be verified first' });
+        // Allow activation from 'verified' or 'pending' status
+        if (!['verified', 'pending'].includes(merchant.status)) {
+            return res.status(400).json({ error: 'Merchant must be verified or pending to activate' });
         }
 
         // Activate merchant
