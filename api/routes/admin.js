@@ -146,10 +146,21 @@ router.get('/merchants', requireAuth, async (req, res) => {
 // POST /admin/merchants - Add new merchant
 router.post('/merchants', requireAuth, async (req, res) => {
     try {
-        const { domain, tenant_id, auto_verify = true } = req.body;
+        let { domain, tenant_id, auto_verify = true } = req.body;
 
-        if (!domain || !tenant_id) {
-            return res.status(400).json({ error: 'domain and tenant_id required' });
+        if (!domain) {
+            return res.status(400).json({ error: 'domain is required' });
+        }
+
+        // Auto-detect tenant_id if not provided (use first active tenant)
+        if (!tenant_id) {
+            const tenantResult = await req.app.locals.db.query(
+                "SELECT id FROM tenants WHERE status = 'active' ORDER BY created_at LIMIT 1"
+            );
+            if (tenantResult.rows.length === 0) {
+                return res.status(500).json({ error: 'No active tenant found' });
+            }
+            tenant_id = tenantResult.rows[0].id;
         }
 
         // Normalize domain
