@@ -336,7 +336,16 @@ async function verifyMerchantUCP(merchantId, db) {
     }
 
     const merchant = merchantResult.rows[0];
-    const ucpEndpoint = merchant.ucp_endpoint || `${merchant.domain}/.well-known/ucp`;
+
+    // Construct UCP endpoint URL with protocol
+    let ucpEndpoint = merchant.ucp_endpoint;
+    if (!ucpEndpoint) {
+        // Add https:// if not present in domain
+        const domain = merchant.domain.startsWith('http')
+            ? merchant.domain
+            : `https://${merchant.domain}`;
+        ucpEndpoint = `${domain}/.well-known/ucp`;
+    }
 
     try {
         // Fetch UCP manifest
