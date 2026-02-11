@@ -32,10 +32,12 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
     // State management
     let recognition = null;
     let isListening = false;
+    let isButtonHeld = false; // Track if button is currently being held
     let pressStartTime = 0;
     let mode = null; // 'hold' or 'toggle'
     let finalTranscript = '';
     let recognitionStartTime = 0; // Track when recognition actually started
+    let restartAttempts = 0; // Track restart attempts to prevent infinite loop
 
     // Get UI elements
     const voiceWaves = micButton.querySelector('.voice-waves');
@@ -160,14 +162,35 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
 
         rec.onend = () => {
             const recognitionDuration = Date.now() - recognitionStartTime;
-            console.log('Speech recognition ended', { duration: recognitionDuration + 'ms' });
+            console.log('Speech recognition ended', { duration: recognitionDuration + 'ms', isButtonHeld, restartAttempts });
 
             // Get current transcript
             const transcript = searchInput.value.trim();
 
-            // ANDROID FIX: If recognition ended quickly but we have transcript, trigger search
+            // ANDROID FIX: If recognition ended very quickly AND button is still held, restart it
+            // This handles Android killing recognition due to "no speech" before user can speak
+            if (recognitionDuration < 200 && isButtonHeld && restartAttempts < 3) {
+                console.warn('ANDROID: Recognition ended prematurely after', recognitionDuration, 'ms - restarting');
+                restartAttempts++;
+
+                // Restart recognition immediately
+                try {
+                    recognition = createRecognition();
+                    recognition.start();
+                    // Keep UI in recording state - don't reset
+                    return;
+                } catch (error) {
+                    console.error('Failed to restart recognition:', error);
+                    // Fall through to normal cleanup
+                }
+            }
+
+            // Reset restart attempts
+            restartAttempts = 0;
+
+            // If recognition ended quickly but we have transcript, trigger search
             if (recognitionDuration < 500 && isListening) {
-                console.warn('ANDROID: Recognition ended prematurely after', recognitionDuration, 'ms');
+                console.warn('ANDROID: Recognition ended after', recognitionDuration, 'ms with transcript');
 
                 // If we have transcript, trigger search immediately
                 if (transcript && onComplete) {
@@ -175,11 +198,12 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
                     searchInput.classList.remove('transcribing');
                     onComplete(transcript);
                     isListening = false;
+                    isButtonHeld = false;
                     resetUIToIdle();
                     return;
                 }
 
-                // No transcript yet - keep UI in listening state briefly
+                // No transcript yet - wait briefly for late arrival
                 setTimeout(() => {
                     if (isListening) {
                         const delayedTranscript = searchInput.value.trim();
@@ -189,6 +213,7 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
                             onComplete(delayedTranscript);
                         }
                         isListening = false;
+                        isButtonHeld = false;
                         resetUIToIdle();
                     }
                 }, 300);
@@ -205,6 +230,7 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
             }
 
             isListening = false;
+            isButtonHeld = false;
             resetUIToIdle();
         };
 
@@ -269,6 +295,8 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
         updateStatusText('');
         mode = null;
         isListening = false;
+        isButtonHeld = false;
+        restartAttempts = 0;
 
         // Ensure mic icon is visible after reset
         if (micIcon) {
@@ -286,6 +314,10 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
         // Ignore if already listening
         if (isListening) return;
 
+        // Mark button as held
+        isButtonHeld = true;
+        restartAttempts = 0;
+
         // ANDROID FIX: Start recognition IMMEDIATELY - before any other logic
         // Android kills microphone if start() isn't the first operation after touch
         finalTranscript = '';
@@ -298,6 +330,7 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
             console.error('Failed to start recognition:', error);
             updateStatusText('Voice search failed. Please try again.');
             setTimeout(() => updateStatusText(''), 3000);
+            isButtonHeld = false;
             return;
         }
 
@@ -317,6 +350,9 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
      */
     function handlePointerUp(e) {
         e.preventDefault();
+
+        // Mark button as released
+        isButtonHeld = false;
 
         const pressDuration = Date.now() - pressStartTime;
 
