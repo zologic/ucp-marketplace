@@ -29,6 +29,9 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
         return null;
     }
 
+    // Detect Android
+    const isAndroid = /Android/i.test(navigator.userAgent);
+
     // State management
     let recognition = null;
     let isListening = false;
@@ -49,8 +52,16 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
      */
     function createRecognition() {
         const rec = new SpeechRecognition();
-        rec.continuous = true;
-        rec.interimResults = true;
+
+        // Platform-specific configuration
+        if (isAndroid) {
+            rec.continuous = true;      // Don't auto-stop (critical for Android)
+            rec.interimResults = true;  // Show results while speaking
+        } else {
+            rec.continuous = false;     // Desktop can use single-shot
+            rec.interimResults = false;
+        }
+
         rec.lang = 'en-US';
         rec.maxAlternatives = 1;
 
@@ -118,6 +129,12 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
         rec.onerror = (event) => {
             console.error('Speech recognition error:', event.error, event);
 
+            // Ignore "no-speech" on Android (expected behavior with continuous mode)
+            if (event.error === 'no-speech' && isAndroid) {
+                console.log('ANDROID: Ignoring no-speech error (expected with continuous mode)');
+                return;
+            }
+
             let errorMessage = '';
 
             switch (event.error) {
@@ -167,10 +184,9 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
             // Get current transcript
             const transcript = searchInput.value.trim();
 
-            // ANDROID FIX: If recognition ended very quickly AND button is still held, restart it
-            // This handles Android killing recognition due to "no speech" before user can speak
-            if (recognitionDuration < 200 && isButtonHeld && restartAttempts < 3) {
-                console.warn('ANDROID: Recognition ended prematurely after', recognitionDuration, 'ms - restarting');
+            // ANDROID: Auto-restart if button still held (handles Android killing recognition)
+            if (isButtonHeld && isAndroid && restartAttempts < 5) {
+                console.warn('ANDROID: Button still held, restarting recognition (attempt', restartAttempts + 1, ')');
                 restartAttempts++;
 
                 // Restart recognition immediately
