@@ -59,6 +59,23 @@ async function initDatabase() {
 
     console.log('[init-db] ✓ Master schema applied successfully');
     console.log('[init-db] ✓ All tables, indexes, and triggers created');
+
+    // Seed default tenant for fresh installations
+    console.log('[init-db] Seeding default tenant...');
+    const defaultTenantName = process.env.TENANT_NAME || 'Marketplace';
+    const defaultDomain = process.env.DOMAIN || 'localhost';
+    const defaultRevenuePercentage = parseInt(process.env.TENANT_REVENUE_PERCENTAGE || '80', 10);
+
+    await pool.query(`
+      INSERT INTO tenants (name, domain, revenue_percentage, status)
+      VALUES ($1, $2, $3, 'active')
+      ON CONFLICT (domain) DO UPDATE
+        SET name = EXCLUDED.name,
+            revenue_percentage = EXCLUDED.revenue_percentage
+      RETURNING id, name, domain
+    `, [defaultTenantName, defaultDomain, defaultRevenuePercentage]);
+
+    console.log('[init-db] ✓ Default tenant created: ' + defaultTenantName + ' (' + defaultDomain + ')');
     console.log('[init-db] Database is ready for use');
 
     await pool.end();

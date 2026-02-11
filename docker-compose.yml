@@ -52,6 +52,9 @@ services:
       - NODE_ENV=production
       - API_PORT=3000
       - RUN_WORKER=true
+      - DOMAIN=${DOMAIN:-localhost}
+      - TENANT_NAME=${TENANT_NAME:-Marketplace}
+      - TENANT_REVENUE_PERCENTAGE=${TENANT_REVENUE_PERCENTAGE:-80}
     depends_on:
       postgres:
         condition: service_healthy
