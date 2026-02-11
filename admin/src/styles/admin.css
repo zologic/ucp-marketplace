@@ -797,6 +797,56 @@ p {
   flex-direction: column;
 }
 
+/* 19. Details Modal */
+.details-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.details-section {
+  padding-bottom: var(--space-lg);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.details-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.details-heading {
+  font-size: var(--font-lg);
+  font-weight: 600;
+  color: var(--text-white);
+  margin-bottom: var(--space-md);
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--space-md);
+}
+
+.details-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.details-label {
+  font-size: var(--font-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.details-value {
+  font-size: var(--font-md);
+  color: var(--text-white);
+  word-break: break-word;
+}
+
 .filter-group .form-label {
   margin-bottom: var(--space-sm);
 }

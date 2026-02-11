@@ -19,6 +19,7 @@ function Tenants() {
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState(null);
 
   // Form state
@@ -119,6 +120,11 @@ function Tenants() {
     setIsEditModalOpen(true);
   };
 
+  const openDetailsModal = (tenant) => {
+    setSelectedTenant(tenant);
+    setIsDetailsModalOpen(true);
+  };
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -195,7 +201,7 @@ function Tenants() {
           <Button variant="outline" size="sm" onClick={() => openEditModal(row)}>
             Edit
           </Button>
-          <Button variant="outline" size="sm" onClick={() => alert('View merchant details')}>
+          <Button variant="outline" size="sm" onClick={() => openDetailsModal(row)}>
             View Details
           </Button>
         </div>
@@ -325,6 +331,125 @@ function Tenants() {
             </select>
           </div>
         </form>
+      </Modal>
+
+      {/* Tenant Details Modal */}
+      <Modal
+        isOpen={isDetailsModalOpen}
+        onClose={() => setIsDetailsModalOpen(false)}
+        title="Tenant Details"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setIsDetailsModalOpen(false)}>
+              Close
+            </Button>
+            <Button variant="primary" onClick={() => {
+              setIsDetailsModalOpen(false);
+              openEditModal(selectedTenant);
+            }}>
+              Edit Tenant
+            </Button>
+          </>
+        }
+      >
+        {selectedTenant && (
+          <div className="details-container">
+            <div className="details-section">
+              <h3 className="details-heading">Basic Information</h3>
+              <div className="details-grid">
+                <div className="details-item">
+                  <label className="details-label">Name</label>
+                  <div className="details-value">{selectedTenant.name}</div>
+                </div>
+                <div className="details-item">
+                  <label className="details-label">Domain</label>
+                  <div className="details-value">
+                    <a href={`https://${selectedTenant.domain}`} target="_blank" rel="noopener noreferrer" className="text-primary">
+                      {selectedTenant.domain}
+                    </a>
+                  </div>
+                </div>
+                <div className="details-item">
+                  <label className="details-label">Status</label>
+                  <div className="details-value">
+                    <span className={`badge ${getStatusBadge(selectedTenant.status)}`}>
+                      {selectedTenant.status}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="details-section">
+              <h3 className="details-heading">Revenue & Performance</h3>
+              <div className="details-grid">
+                <div className="details-item">
+                  <label className="details-label">Revenue Share</label>
+                  <div className="details-value">
+                    <span className="font-semibold">{selectedTenant.revenue_share || 95}%</span>
+                    <span className="text-muted" style={{ fontSize: '12px', marginLeft: '8px' }}>
+                      (Tenant gets {selectedTenant.revenue_share || 95}%, we get {100 - (selectedTenant.revenue_share || 95)}%)
+                    </span>
+                  </div>
+                </div>
+                <div className="details-item">
+                  <label className="details-label">Merchants Count</label>
+                  <div className="details-value font-semibold">{selectedTenant.merchants_count || 0}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="details-section">
+              <h3 className="details-heading">Timeline</h3>
+              <div className="details-grid">
+                <div className="details-item">
+                  <label className="details-label">Created</label>
+                  <div className="details-value">{formatDate(selectedTenant.created_at)}</div>
+                </div>
+                {selectedTenant.updated_at && (
+                  <div className="details-item">
+                    <label className="details-label">Last Updated</label>
+                    <div className="details-value">{formatDate(selectedTenant.updated_at)}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {selectedTenant.branding && (
+              <div className="details-section">
+                <h3 className="details-heading">Branding Settings</h3>
+                <div className="details-grid">
+                  {selectedTenant.branding.logo_url && (
+                    <div className="details-item">
+                      <label className="details-label">Logo</label>
+                      <div className="details-value">
+                        <img src={selectedTenant.branding.logo_url} alt="Tenant logo" style={{ maxHeight: '40px' }} />
+                      </div>
+                    </div>
+                  )}
+                  {selectedTenant.branding.primary_color && (
+                    <div className="details-item">
+                      <label className="details-label">Primary Color</label>
+                      <div className="details-value">
+                        <span style={{
+                          display: 'inline-block',
+                          width: '20px',
+                          height: '20px',
+                          backgroundColor: selectedTenant.branding.primary_color,
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '4px',
+                          marginRight: '8px',
+                          verticalAlign: 'middle'
+                        }}></span>
+                        {selectedTenant.branding.primary_color}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
 
       {/* Edit Tenant Modal */}
