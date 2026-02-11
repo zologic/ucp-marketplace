@@ -197,8 +197,10 @@ p {
 }
 
 .sidebar-link.active {
-  background: linear-gradient(90deg, rgba(35, 134, 54, 0.15) 0%, transparent 100%);
+  background: rgba(63, 185, 80, 0.1);
   color: var(--accent-success);
+  border-left: 4px solid var(--accent-success);
+  box-shadow: inset 10px 0 20px -10px rgba(63, 185, 80, 0.2);
 }
 
 .sidebar-link.active::before {
@@ -400,12 +402,39 @@ p {
   margin-bottom: var(--space-md);
 }
 
-.stat-label {
+.stat-label,
+.stat-card-label {
   font-size: var(--font-sm);
   color: var(--text-muted);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  margin-bottom: var(--space-sm);
+}
+
+.stat-value,
+.stat-card-value {
+  font-size: var(--font-3xl);
+  font-weight: 700;
+  color: var(--text-white);
+  line-height: 1;
+  margin-bottom: var(--space-xs);
+}
+
+.stat-change,
+.stat-card-change {
+  font-size: var(--font-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.stat-change.positive {
+  color: var(--accent-success);
+}
+
+.stat-change.negative {
+  color: var(--accent-danger);
 }
 
 .stat-icon {
@@ -433,29 +462,6 @@ p {
 .stat-card.stat-info .stat-icon {
   background: rgba(88, 166, 255, 0.1);
   color: var(--accent-info);
-}
-
-.stat-value {
-  font-size: var(--font-3xl);
-  font-weight: 700;
-  color: var(--text-white);
-  line-height: 1;
-  margin-bottom: var(--space-xs);
-}
-
-.stat-change {
-  font-size: var(--font-sm);
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.stat-change.positive {
-  color: var(--accent-success);
-}
-
-.stat-change.negative {
-  color: var(--accent-danger);
 }
 
 /* 6. Buttons */
@@ -1025,7 +1031,18 @@ p {
   color: var(--text-muted);
 }
 
-/* 22. Misc */
+/* 22. Icon Utilities */
+.btn i,
+button i {
+  margin-right: 6px;
+}
+
+.btn i:only-child,
+button i:only-child {
+  margin-right: 0;
+}
+
+/* 23. Misc */
 .w-full { width: 100%; }
 
 a {
