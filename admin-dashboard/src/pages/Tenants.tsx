@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
-import { Plus, Building2, TrendingUp } from 'lucide-react';
+import { Plus, Building2, TrendingUp, RefreshCw } from 'lucide-react';
 import type { Tenant } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 
@@ -34,7 +34,7 @@ export default function Tenants() {
   });
 
   // Fetch tenants
-  const { data: tenants, isLoading } = useQuery<Tenant[]>({
+  const { data: tenants, isLoading, isError, error } = useQuery<Tenant[]>({
     queryKey: ['tenants'],
     queryFn: async () => {
       const response = await apiClient.get('/tenants');
@@ -114,6 +114,30 @@ export default function Tenants() {
         <div className="h-64 flex items-center justify-center">
           <div className="text-muted-foreground">Loading tenants...</div>
         </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold">Tenants</h1>
+        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <div className="text-red-500 text-lg font-semibold">Failed to load tenants</div>
+              <p className="text-muted-foreground text-center max-w-md">
+                {error instanceof Error ? error.message : 'Unable to connect to the API. Please check your connection and try again.'}
+              </p>
+              <Button onClick={() => window.location.reload()}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Retry
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
