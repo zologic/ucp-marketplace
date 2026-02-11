@@ -561,8 +561,31 @@ router.get('/system/health', requireAuth, async (req, res) => {
             health.mcp_server = { status: 'unhealthy', merchants_count: 0, tenants_count: 0, last_sync: null };
         }
 
-        // Worker status
-        health.worker = { status: 'unknown', queue_depth: 0, jobs_processed_24h: 0, jobs_failed_24h: 0, next_crawl: null };
+        // Worker status (check if worker is running in same process)
+        if (global.workerStatus && global.workerStatus.running) {
+            const uptimeSeconds = global.workerStatus.startedAt
+                ? Math.floor((Date.now() - global.workerStatus.startedAt) / 1000)
+                : 0;
+            health.worker = {
+                status: 'healthy',
+                queue_depth: 0,
+                jobs_processed_24h: 0,
+                jobs_failed_24h: 0,
+                next_crawl: null,
+                uptime_seconds: uptimeSeconds
+            };
+        } else if (global.workerStatus && global.workerStatus.error) {
+            health.worker = {
+                status: 'unhealthy',
+                queue_depth: 0,
+                jobs_processed_24h: 0,
+                jobs_failed_24h: 0,
+                next_crawl: null,
+                error: global.workerStatus.error
+            };
+        } else {
+            health.worker = { status: 'not_running', queue_depth: 0, jobs_processed_24h: 0, jobs_failed_24h: 0, next_crawl: null };
+        }
 
         // Metrics (24h)
         try {

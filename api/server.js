@@ -115,6 +115,13 @@ process.on('SIGTERM', async () => {
     process.exit(0);
 });
 
+// Global worker status tracking
+global.workerStatus = {
+    running: false,
+    startedAt: null,
+    error: null
+};
+
 // Start server
 app.listen(PORT, () => {
     console.log(`API server listening on port ${PORT}`);
@@ -126,9 +133,12 @@ if (process.env.RUN_WORKER === 'true') {
     console.log('Starting background worker...');
     try {
         require('../worker/index.js');
+        global.workerStatus.running = true;
+        global.workerStatus.startedAt = new Date();
         console.log('Background worker started successfully');
     } catch (err) {
         console.error('Failed to start background worker:', err);
+        global.workerStatus.error = err.message;
     }
 }
 
