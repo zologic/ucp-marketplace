@@ -157,6 +157,8 @@ body {
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
+    pointer-events: auto;
+    z-index: 10;
 }
 
 .mic-button:hover {
@@ -777,6 +779,11 @@ button:focus-visible {
     align-items: center;
     gap: 3px;
     height: 20px;
+    pointer-events: none;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
 }
 
 .voice-waves.hidden {
