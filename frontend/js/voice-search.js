@@ -310,20 +310,11 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
         // Ignore if already listening
         if (isListening) return;
 
-        // Minimum press duration check (100ms)
+        // Track press start time for minimum duration check
         pressStartTime = Date.now();
 
-        // Start recording
+        // Start recording immediately
         startRecording();
-
-        // Set up hold mode detection (400ms threshold)
-        setTimeout(() => {
-            if (isListening) {
-                mode = 'hold';
-                setSearchPillPulsing(true);
-                updateStatusText('Listening...');
-            }
-        }, 400);
     }
 
     /**
@@ -341,55 +332,16 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
             return;
         }
 
-        // Determine mode based on press duration
-        if (pressDuration < 400) {
-            // Toggle mode - keep listening
-            mode = 'toggle';
-            micButton.classList.add('toggle-mode');
-            setSearchPillPulsing(false);
-            updateStatusText('Listening... Tap to stop');
-        } else {
-            // Hold mode - stop and search immediately
-            mode = 'hold';
-            const transcript = searchInput.value.trim();
-
-            stopRecording();
-            searchInput.classList.remove('transcribing');
-
-            if (transcript && onComplete) {
-                onComplete(transcript);
-            }
-
-            resetUIToIdle();
-        }
+        // Always stop recording on release - onend will trigger search
+        stopRecording();
     }
 
     /**
-     * Handle toggle mode second tap (stop)
-     */
-    function handleToggleStop(e) {
-        if (mode === 'toggle' && isListening) {
-            e.preventDefault();
-            const transcript = searchInput.value.trim();
-
-            stopRecording();
-            searchInput.classList.remove('transcribing');
-
-            if (transcript && onComplete) {
-                onComplete(transcript);
-            }
-
-            resetUIToIdle();
-        }
-    }
-
-    /**
-     * Handle click event (combines pointer events)
+     * Handle click event (no-op for simple press/release)
      */
     function handleClick(e) {
-        if (mode === 'toggle' && isListening) {
-            handleToggleStop(e);
-        }
+        // Click is handled by pointerdown + pointerup
+        // No additional action needed
     }
 
     /**
@@ -399,8 +351,9 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
         if (e.key === ' ' || e.key === 'Enter') {
             if (!isListening) {
                 handlePointerDown(e);
-            } else if (mode === 'toggle') {
-                handleToggleStop(e);
+            } else {
+                // Release: stop recording, onend will trigger search
+                stopRecording();
             }
         } else if (e.key === 'Escape') {
             if (isListening) {
