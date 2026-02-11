@@ -187,6 +187,7 @@ function Billing() {
       render: (row) => (
         <div className="table-actions">
           <Button variant="outline" size="sm" onClick={() => handleDownloadPdf(row.id)}>
+            <i className="fas fa-download"></i>
             Download
           </Button>
           {row.status !== 'paid' && (
@@ -207,7 +208,10 @@ function Billing() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Billing</h1>
+        <h1 className="page-title">
+          <i className="fas fa-file-invoice-dollar"></i>
+          Billing
+        </h1>
         <p className="page-description">Manage invoices and track commission payments</p>
       </div>
 
@@ -283,6 +287,7 @@ function Billing() {
           </div>
           <div className="filter-group flex items-end">
             <Button type="submit" variant="primary">
+              <i className="fas fa-magnifying-glass"></i>
               Search
             </Button>
           </div>

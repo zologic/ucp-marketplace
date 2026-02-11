@@ -125,10 +125,14 @@ function Analytics() {
     <div>
       <div className="page-header flex justify-between items-center">
         <div>
-          <h1 className="page-title">Analytics</h1>
+          <h1 className="page-title">
+            <i className="fas fa-chart-line"></i>
+            Analytics
+          </h1>
           <p className="page-description">Track referral conversions and revenue performance</p>
         </div>
         <Button variant="primary" onClick={handleExport} disabled={exporting}>
+          <i className="fas fa-file-csv"></i>
           {exporting ? 'Exporting...' : 'Export CSV'}
         </Button>
       </div>
@@ -156,6 +160,7 @@ function Analytics() {
           </div>
           <div className="filter-group flex items-end">
             <Button type="submit" variant="primary">
+              <i className="fas fa-filter"></i>
               Apply Filters
             </Button>
           </div>

@@ -127,6 +127,7 @@ function AuditLogs() {
       label: 'Details',
       render: (row) => (
         <Button variant="outline" size="sm" onClick={() => expandDetails(row)}>
+          <i className="fas fa-code"></i>
           View JSON
         </Button>
       )
@@ -153,7 +154,10 @@ function AuditLogs() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Audit Logs</h1>
+        <h1 className="page-title">
+          <i className="fas fa-clipboard-list"></i>
+          Audit Logs
+        </h1>
         <p className="page-description">Track all administrative actions and changes</p>
       </div>
 
@@ -225,6 +229,7 @@ function AuditLogs() {
             </div>
             <div className="filter-group flex items-end">
               <Button type="submit" variant="primary">
+                <i className="fas fa-filter"></i>
                 Apply Filters
               </Button>
             </div>

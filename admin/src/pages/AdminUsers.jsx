@@ -226,10 +226,14 @@ function AdminUsers() {
     <div>
       <div className="page-header flex justify-between items-center">
         <div>
-          <h1 className="page-title">Admin Users</h1>
+          <h1 className="page-title">
+            <i className="fas fa-user-shield"></i>
+            Admin Users
+          </h1>
           <p className="page-description">Manage admin user accounts and permissions</p>
         </div>
         <Button variant="primary" onClick={openAddModal}>
+          <i className="fas fa-plus"></i>
           Add New Admin
         </Button>
       </div>

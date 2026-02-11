@@ -213,10 +213,14 @@ function Tenants() {
     <div>
       <div className="page-header flex justify-between items-center">
         <div>
-          <h1 className="page-title">Tenants</h1>
+          <h1 className="page-title">
+            <i className="fas fa-building-user"></i>
+            Tenants
+          </h1>
           <p className="page-description">Manage tenant organizations and revenue share agreements</p>
         </div>
         <Button variant="primary" onClick={openAddModal}>
+          <i className="fas fa-plus"></i>
           Add New Tenant
         </Button>
       </div>
