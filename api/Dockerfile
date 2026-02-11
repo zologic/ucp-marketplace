@@ -17,9 +17,10 @@ RUN npm ci --only=production
 # Copy application code
 COPY api/ .
 
-# Copy database migrations to /database and migrate.js to /app
+# Copy database migrations to /database and scripts to /app
 COPY --chown=nodejs:nodejs database/ /database
 COPY --chown=nodejs:nodejs database/migrations_archive/migrate.js /app/migrate.js
+COPY --chown=nodejs:nodejs database/init-db.js /app/init-db.js
 
 # Change ownership to non-root user
 RUN chown -R nodejs:nodejs /app

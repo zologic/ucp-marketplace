@@ -38,8 +38,11 @@ async function initDatabase() {
 
     console.log('[init-db] Fresh database detected. Applying master schema...');
 
-    // Read schema.sql
-    const schemaPath = path.join(__dirname, 'schema.sql');
+    // Read schema.sql (check both current dir and /database for Docker compatibility)
+    let schemaPath = path.join(__dirname, 'schema.sql');
+    if (!fs.existsSync(schemaPath)) {
+      schemaPath = '/database/schema.sql';
+    }
 
     if (!fs.existsSync(schemaPath)) {
       console.error('[init-db] ERROR: schema.sql not found at:', schemaPath);
