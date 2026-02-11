@@ -244,39 +244,33 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
 
     /**
      * Handle pointer down (start press)
-     * CRITICAL: recognition.start() must be FIRST for Android User Activation
+     * CRITICAL: recognition.start() must be ABSOLUTE FIRST for Android User Activation
      */
     function handlePointerDown(e) {
         e.preventDefault();
 
-        // Ignore if already listening
+        // Early exit if already listening
         if (isListening) return;
 
-        // Mark button as held
-        isButtonHeld = true;
-        restartAttempts = 0;
-
-        // ANDROID FIX: Start recognition IMMEDIATELY - before any other logic
-        // Android kills microphone if start() isn't the first operation after touch
+        // Create recognition object
         finalTranscript = '';
         recognition = createRecognition();
 
+        // CRITICAL: START IMMEDIATELY - must be first synchronous operation
         try {
-            // START FIRST - this must be immediate for Android
             recognition.start();
         } catch (error) {
             console.error('Failed to start recognition:', error);
-            updateStatusText('Voice search failed. Please try again.');
-            setTimeout(() => updateStatusText(''), 3000);
-            isButtonHeld = false;
             return;
         }
 
-        // Now handle timing and UI updates AFTER start() has been called
+        // State management AFTER start() is called
+        isButtonHeld = true;
+        restartAttempts = 0;
         pressStartTime = Date.now();
         isListening = true;
 
-        // UI updates can happen after start() is called
+        // UI updates AFTER start() is called
         showVoiceWaves();
         setSearchPillActive(true);
         micButton.classList.add('active');
