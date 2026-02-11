@@ -30,9 +30,9 @@ bizform.app {
         reverse_proxy api:3000
     }
 
-    # Admin UI (development access)
+    # Admin UI (production - serves from Nginx on port 80)
     handle /admin-ui/* {
-        reverse_proxy admin:5173
+        reverse_proxy admin:80
     }
 
     # Health check endpoint
@@ -72,9 +72,9 @@ bizform.app {
         reverse_proxy api:3000
     }
 
-    # Route /admin-ui/* requests to admin dashboard (development)
+    # Route /admin-ui/* requests to admin dashboard (production)
     handle /admin-ui/* {
-        reverse_proxy admin:5173
+        reverse_proxy admin:80
     }
 
     # Route /internal/* requests to backend API (internal routes)

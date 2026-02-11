@@ -121,4 +121,15 @@ app.listen(PORT, () => {
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
+// Start background worker if RUN_WORKER env is set
+if (process.env.RUN_WORKER === 'true') {
+    console.log('Starting background worker...');
+    try {
+        require('../worker/index.js');
+        console.log('Background worker started successfully');
+    } catch (err) {
+        console.error('Failed to start background worker:', err);
+    }
+}
+
 module.exports = app;

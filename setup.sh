@@ -464,9 +464,9 @@ ${PRIMARY_DOMAIN} {
         reverse_proxy api:3000
     }
 
-    # Admin UI
+    # Admin UI (production - serves from Nginx on port 80)
     handle /admin-ui/* {
-        reverse_proxy admin:5173
+        reverse_proxy admin:80
     }
 
     # Internal routes (service-to-service)
