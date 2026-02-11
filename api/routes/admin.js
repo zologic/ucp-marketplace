@@ -246,9 +246,9 @@ router.post('/merchants/:id/activate', requireAuth, async (req, res) => {
 
         const merchant = merchantResult.rows[0];
 
-        // Allow activation from 'verified' or 'pending' status
-        if (!['verified', 'pending'].includes(merchant.status)) {
-            return res.status(400).json({ error: 'Merchant must be verified or pending to activate' });
+        // Allow activation from 'verified', 'pending', or 'suspended' status
+        if (!['verified', 'pending', 'suspended'].includes(merchant.status)) {
+            return res.status(400).json({ error: 'Merchant must be verified, pending, or suspended to activate' });
         }
 
         // Activate merchant
