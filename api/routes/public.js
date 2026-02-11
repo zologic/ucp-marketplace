@@ -288,14 +288,14 @@ router.post('/checkout', async (req, res) => {
         }
 
         // Store session for deduplication
-        await req.app.locals.redis.setex(
+        await req.app.locals.redis.set(
             sessionKey,
-            300, // 5 minutes
             JSON.stringify({
                 product_id,
                 merchant_id,
                 created_at: Date.now()
-            })
+            }),
+            { EX: 300 } // 5 minutes
         );
 
         // Log click event in database
