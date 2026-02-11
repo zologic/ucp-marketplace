@@ -36,10 +36,6 @@ body {
 .search-section {
     text-align: center;
     flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
     padding: 40px 20px;
 }
 
@@ -63,7 +59,24 @@ body {
     border-radius: 50px;
     padding: 8px 8px 8px 28px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    transition: all 0.3s ease;
+    transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Search Pill - Centered State (Initial) */
+.search-pill.centered {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Search Pill - Sticky State (With Results) */
+.search-pill.sticky {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    top: auto;
 }
 
 .search-pill.active {
@@ -117,16 +130,16 @@ body {
 
 .mic-button {
     position: relative;
-    width: 48px;
-    height: 48px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid #3fb950;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #9ca3af;
-    font-size: 18px;
+    color: #3fb950;
+    font-size: 14px;
     cursor: pointer;
     transition: all 0.2s ease;
     flex-shrink: 0;
@@ -142,6 +155,7 @@ body {
     background: rgba(63, 185, 80, 0.15);
     border-color: rgba(63, 185, 80, 0.4);
     color: #3fb950;
+    box-shadow: 0 0 0 4px rgba(63, 185, 80, 0.2), 0 0 16px rgba(63, 185, 80, 0.3);
 }
 
 .mic-button.toggle-mode {
@@ -226,10 +240,38 @@ body {
     transform: none;
 }
 
+.clear-button {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #9ca3af;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.clear-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e5e7eb;
+}
+
+.clear-button.hidden {
+    display: none;
+}
+
 /* Trust Indicators */
 .trust-indicators {
+    position: fixed;
+    top: calc(50% + 80px);
+    left: 50%;
+    transform: translateX(-50%);
     max-width: 720px;
-    margin: 0 auto;
     padding: 0 20px;
     display: flex;
     align-items: center;
@@ -238,6 +280,12 @@ body {
     gap: 8px;
     font-size: 14px;
     color: #6b7280;
+    transition: opacity 0.3s ease;
+}
+
+.trust-indicators.hidden-for-results {
+    opacity: 0;
+    pointer-events: none;
 }
 
 .trust-indicators .separator {

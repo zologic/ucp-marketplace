@@ -11,6 +11,20 @@ import { showLoading, hideLoading, renderResults, renderError, clearError } from
  * @param {string} apiBase - API base URL
  */
 export async function handleSearch(query, apiBase) {
+    // Trigger pill transition to sticky bottom
+    const searchPill = document.querySelector('.search-pill');
+    const trustIndicators = document.querySelector('.trust-indicators');
+
+    if (searchPill) {
+        searchPill.classList.remove('centered');
+        searchPill.classList.add('sticky');
+    }
+
+    // Hide trust indicators during results
+    if (trustIndicators) {
+        trustIndicators.classList.add('hidden-for-results');
+    }
+
     // Smooth scroll to results area on subsequent searches
     const resultsSection = document.getElementById('results-section');
     if (resultsSection && !resultsSection.classList.contains('hidden')) {
