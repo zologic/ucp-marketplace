@@ -12,7 +12,7 @@ async function indexProducts(db) {
     try {
         // Get all active merchants
         const result = await db.query(`
-            SELECT m.id, m.domain, m.ucp_endpoint, m.tenant_id
+            SELECT m.id, m.domain, m.ucp_endpoint, m.service_base_url, m.tenant_id
             FROM merchants m
             WHERE m.status = 'active' AND m.ucp_endpoint IS NOT NULL
             LIMIT 50
@@ -26,17 +26,13 @@ async function indexProducts(db) {
 
         for (const merchant of merchants) {
             try {
-                // Fetch UCP manifest to get products endpoint
-                const manifestResponse = await axios.get(merchant.ucp_endpoint, {
-                    timeout: 10000
-                });
-
-                const productsEndpoint = manifestResponse.data.products_endpoint;
-
-                if (!productsEndpoint) {
-                    console.warn(`[indexProducts] No products endpoint for ${merchant.domain}`);
+                // Construct products endpoint from stored base_url
+                if (!merchant.service_base_url) {
+                    console.warn(`[indexProducts] No service_base_url for ${merchant.domain} - needs re-verification`);
                     continue;
                 }
+
+                const productsEndpoint = `${merchant.service_base_url}/products`;
 
                 // Fetch products from merchant
                 const productsResponse = await axios.get(productsEndpoint, {

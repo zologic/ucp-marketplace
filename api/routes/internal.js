@@ -17,7 +17,15 @@ router.get('/active-merchants', async (req, res) => {
 
         // Query active merchants for tenant
         const result = await req.app.locals.db.query(`
-            SELECT m.id, m.domain, m.ucp_endpoint, m.public_key, mb.status as billing_status
+            SELECT m.id,
+                   m.domain,
+                   m.ucp_endpoint,
+                   m.public_key,
+                   m.signing_key_id,
+                   m.service_base_url,
+                   m.business_name,
+                   m.business_url,
+                   mb.status as billing_status
             FROM merchants m
             LEFT JOIN merchant_billing mb ON m.id = mb.merchant_id
             WHERE m.tenant_id = $1
