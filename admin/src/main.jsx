@@ -6,7 +6,7 @@ import './styles/admin.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename="/admin-ui">
       <App />
     </BrowserRouter>
   </React.StrictMode>
