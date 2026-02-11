@@ -313,6 +313,9 @@ function Merchants() {
               <Button variant="outline" size="sm" onClick={() => handleReverifyMerchant(row)}>
                 Re-verify
               </Button>
+              <Button variant="danger" size="sm" onClick={() => openDeleteModal(row)}>
+                Delete
+              </Button>
             </>
           )}
           {row.status === 'verified' && (

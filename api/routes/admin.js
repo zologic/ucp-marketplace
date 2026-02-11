@@ -287,6 +287,42 @@ router.post('/merchants/:id/suspend', requireAuth, async (req, res) => {
     }
 });
 
+// DELETE /admin/merchants/:id - Delete merchant
+router.delete('/merchants/:id', requireAuth, async (req, res) => {
+    try {
+        const merchantId = req.params.id;
+
+        // Check if merchant exists
+        const merchantResult = await req.app.locals.db.query(
+            'SELECT * FROM merchants WHERE id = $1',
+            [merchantId]
+        );
+
+        if (merchantResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Merchant not found' });
+        }
+
+        const merchant = merchantResult.rows[0];
+
+        // Delete merchant (CASCADE will handle related records)
+        await req.app.locals.db.query(
+            'DELETE FROM merchants WHERE id = $1',
+            [merchantId]
+        );
+
+        // Log audit event
+        await logAuditEvent(req.app.locals.db, req.admin.id, 'merchant_deleted', 'merchant', merchantId, { domain: merchant.domain });
+
+        // Trigger MCP reload
+        await triggerMCPReload();
+
+        res.json({ success: true, deleted_at: new Date().toISOString() });
+    } catch (error) {
+        console.error('Delete merchant error:', error);
+        res.status(500).json({ error: 'Deletion failed' });
+    }
+});
+
 // GET /admin/merchants/:id/analytics - Get merchant analytics
 router.get('/merchants/:id/analytics', requireAuth, async (req, res) => {
     try {
