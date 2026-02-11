@@ -465,7 +465,7 @@ ${PRIMARY_DOMAIN} {
     }
 
     # Admin UI (production - serves from Nginx on port 80)
-    handle /admin-ui/* {
+    handle_path /admin-ui/* {
         reverse_proxy admin:80
     }
 
