@@ -106,42 +106,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 100);
     }
 
-    // Placeholder navigation mode for footer links
-    function initPlaceholderNavigation() {
-        const footerLinks = document.querySelectorAll('.footer a');
-
-        footerLinks.forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault(); // Stop actual navigation
-
-                const href = link.getAttribute('href');
-                const pageName = href.replace('.html', '').replace('/', '');
-
-                // Update URL with pushState (browser back button will work)
-                window.history.pushState(
-                    { page: pageName },
-                    pageName,
-                    href
-                );
-
-                // Optional: Show visual indication that link was clicked
-                console.log(`Navigated to ${href} (placeholder mode)`);
-            });
-        });
-
-        // Handle browser back/forward buttons
-        window.addEventListener('popstate', (e) => {
-            if (e.state && e.state.page) {
-                console.log(`Browser navigation to ${e.state.page} (placeholder mode)`);
-            } else {
-                // Back to home state
-                console.log('Browser navigation to home (placeholder mode)');
-            }
-        });
-    }
-
-    // Call during initialization
-    initPlaceholderNavigation();
 
     // Global error handler
     window.addEventListener('error', (e) => {
