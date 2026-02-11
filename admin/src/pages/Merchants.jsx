@@ -184,10 +184,14 @@ function Merchants() {
 
   const handleRecrawl = async (merchant) => {
     try {
-      await recrawlMerchant(merchant.id);
-      alert('Product recrawl initiated. This may take a few minutes.');
+      const response = await recrawlMerchant(merchant.id);
+      const summary = response.data.summary;
+      alert(`Product recrawl complete!\n\nInserted: ${summary.inserted}\nUpdated: ${summary.updated}\nErrors: ${summary.errors}\nTotal: ${summary.total}`);
+      fetchMerchants(); // Refresh to show updated product count
     } catch (err) {
-      setError('Failed to initiate recrawl');
+      const errorMsg = err.response?.data?.error || 'Failed to initiate recrawl';
+      setError(errorMsg);
+      alert(`Recrawl failed: ${errorMsg}`);
     }
   };
 
