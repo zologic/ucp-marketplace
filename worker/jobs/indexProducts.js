@@ -1,44 +1,85 @@
 /**
  * Job: Index Products from Merchants
  * Frequency: Every 6 hours
+ *
+ * Uses UCP dynamic capability discovery to fetch products.
+ * Tracks indexing attempts in merchant_index_log table.
  */
 
 const axios = require('axios');
+const { parseManifest } = require('../../api/utils/ucpParser');
 
 async function indexProducts(db) {
     const startTime = Date.now();
     console.log('[indexProducts] Starting...');
 
     try {
-        // Get all active merchants
+        // Get merchants due for crawling based on their crawl_interval_hours
         const result = await db.query(`
-            SELECT m.id, m.domain, m.ucp_endpoint, m.tenant_id
+            SELECT
+                m.id,
+                m.domain,
+                m.tenant_id,
+                m.service_base_url,
+                m.ucp_manifest,
+                m.manifest_hash,
+                m.public_key,
+                m.crawl_interval_hours,
+                m.last_indexed_at
             FROM merchants m
-            WHERE m.status = 'active' AND m.ucp_endpoint IS NOT NULL
+            WHERE m.status = 'active'
+              AND m.service_base_url IS NOT NULL
+              AND m.ucp_manifest IS NOT NULL
+              AND (
+                m.last_indexed_at IS NULL
+                OR m.last_indexed_at < NOW() - (m.crawl_interval_hours || ' hours')::INTERVAL
+              )
+            ORDER BY m.last_indexed_at ASC NULLS FIRST
             LIMIT 50
         `);
 
         const merchants = result.rows;
-        console.log(`[indexProducts] Found ${merchants.length} active merchants`);
+        console.log(`[indexProducts] Found ${merchants.length} merchants due for indexing`);
 
         let totalIndexed = 0;
+        let totalFailed = 0;
         let merchantsProcessed = 0;
 
         for (const merchant of merchants) {
+            let logId = null;
+            let productsIndexed = 0;
+            let productsFailed = 0;
+
             try {
-                // Fetch UCP manifest to get products endpoint
-                const manifestResponse = await axios.get(merchant.ucp_endpoint, {
-                    timeout: 10000
-                });
+                // Use cached manifest from database
+                const parsedManifest = parseManifest(merchant.ucp_manifest);
 
-                const productsEndpoint = manifestResponse.data.products_endpoint;
+                // Find products capability using dynamic discovery
+                const productsCap = parsedManifest.capabilities.find(
+                    cap => cap.name === 'dev.ucp.shopping.products' && cap.supported
+                );
 
-                if (!productsEndpoint) {
-                    console.warn(`[indexProducts] No products endpoint for ${merchant.domain}`);
+                if (!productsCap) {
+                    console.warn(`[indexProducts] No products capability for ${merchant.domain}`);
+
+                    // Log failed attempt - no products capability
+                    await logIndexAttempt(db, merchant.id, 'failed', 0, 0, 'NO_PRODUCTS_CAPABILITY', merchant.manifest_hash);
                     continue;
                 }
 
-                // Fetch products from merchant
+                const productsEndpoint = productsCap.endpoint;
+                console.log(`[indexProducts] ${merchant.domain} products endpoint: ${productsEndpoint}`);
+
+                // Create log entry for this indexing attempt
+                const logResult = await db.query(`
+                    INSERT INTO merchant_index_log (merchant_id, started_at, status, manifest_hash)
+                    VALUES ($1, NOW(), 'in_progress', $2)
+                    RETURNING id
+                `, [merchant.id, merchant.manifest_hash]);
+
+                logId = logResult.rows[0].id;
+
+                // Fetch products from merchant using dynamic endpoint
                 const productsResponse = await axios.get(productsEndpoint, {
                     timeout: 30000,
                     params: {
@@ -48,15 +89,16 @@ async function indexProducts(db) {
 
                 const products = productsResponse.data.products || [];
 
-                // Upsert products into database
+                // Upsert products into database with signing_status = 'pending'
                 for (const product of products) {
                     try {
                         await db.query(`
                             INSERT INTO products (
                                 merchant_id, tenant_id, external_id, name, description,
-                                price_cents, currency, category, brand, image_url, stock_status, indexed_at
+                                price_cents, currency, category, brand, image_url, stock_status,
+                                signing_status, indexed_at
                             )
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', NOW())
                             ON CONFLICT (merchant_id, external_id) DO UPDATE SET
                                 name = EXCLUDED.name,
                                 description = EXCLUDED.description,
@@ -66,6 +108,7 @@ async function indexProducts(db) {
                                 brand = EXCLUDED.brand,
                                 image_url = EXCLUDED.image_url,
                                 stock_status = EXCLUDED.stock_status,
+                                signing_status = 'pending',
                                 indexed_at = NOW()
                         `, [
                             merchant.id,
@@ -81,14 +124,24 @@ async function indexProducts(db) {
                             product.stock_status || 'in_stock'
                         ]);
 
+                        productsIndexed++;
                         totalIndexed++;
                     } catch (productError) {
                         console.error(`[indexProducts] Failed to index product ${product.id}:`, productError.message);
+                        productsFailed++;
+                        totalFailed++;
                     }
                 }
 
+                // Update merchant's last_indexed_at timestamp
+                await db.query(`
+                    UPDATE merchants
+                    SET last_indexed_at = NOW()
+                    WHERE id = $1
+                `, [merchant.id]);
+
                 merchantsProcessed++;
-                console.log(`[indexProducts] ✓ ${merchant.domain}: ${products.length} products`);
+                console.log(`[indexProducts] ✓ ${merchant.domain}: ${productsIndexed} products indexed, ${productsFailed} failed`);
 
                 // Mark old products as out of stock (not seen in last 7 days)
                 await db.query(`
@@ -99,8 +152,44 @@ async function indexProducts(db) {
                       AND stock_status != 'out_of_stock'
                 `, [merchant.id]);
 
+                // Log successful attempt
+                await db.query(`
+                    UPDATE merchant_index_log
+                    SET status = 'success',
+                        completed_at = NOW(),
+                        products_indexed = $1,
+                        products_failed = $2
+                    WHERE id = $3
+                `, [productsIndexed, productsFailed, logId]);
+
             } catch (error) {
                 console.error(`[indexProducts] ✗ ${merchant.domain}: ${error.message}`);
+
+                // Determine error code
+                const errorCode = getErrorCode(error);
+
+                // Log failed attempt
+                if (logId) {
+                    await db.query(`
+                        UPDATE merchant_index_log
+                        SET status = 'failed',
+                            completed_at = NOW(),
+                            error_message = $1,
+                            error_code = $2,
+                            products_indexed = $3,
+                            products_failed = $4
+                        WHERE id = $5
+                    `, [
+                        error.message,
+                        errorCode,
+                        productsIndexed,
+                        productsFailed,
+                        logId
+                    ]);
+                } else {
+                    // Log entry was never created
+                    await logIndexAttempt(db, merchant.id, 'failed', productsIndexed, productsFailed, errorCode, merchant.manifest_hash, error.message);
+                }
             }
 
             // Rate limiting: small delay between merchants
@@ -108,13 +197,48 @@ async function indexProducts(db) {
         }
 
         const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-        console.log(`[indexProducts] Completed in ${duration}s: ${merchantsProcessed} merchants, ${totalIndexed} products indexed`);
+        console.log(`[indexProducts] Completed in ${duration}s: ${merchantsProcessed} merchants, ${totalIndexed} products indexed, ${totalFailed} failed`);
 
-        return { merchants_processed: merchantsProcessed, products_indexed: totalIndexed };
+        return {
+            merchants_processed: merchantsProcessed,
+            products_indexed: totalIndexed,
+            products_failed: totalFailed
+        };
     } catch (error) {
         console.error('[indexProducts] Job failed:', error);
         throw error;
     }
+}
+
+/**
+ * Helper: Log indexing attempt to merchant_index_log
+ */
+async function logIndexAttempt(db, merchantId, status, productsIndexed, productsFailed, errorCode, manifestHash, errorMessage = null) {
+    try {
+        await db.query(`
+            INSERT INTO merchant_index_log (
+                merchant_id, started_at, completed_at, status,
+                products_indexed, products_failed, error_message, error_code, manifest_hash
+            )
+            VALUES ($1, NOW(), NOW(), $2, $3, $4, $5, $6, $7)
+        `, [merchantId, status, productsIndexed, productsFailed, errorMessage, errorCode, manifestHash]);
+    } catch (logError) {
+        console.error('[indexProducts] Failed to log index attempt:', logError.message);
+    }
+}
+
+/**
+ * Helper: Get error code from error object
+ */
+function getErrorCode(error) {
+    if (error.code === 'ENOTFOUND') return 'DNS_ERROR';
+    if (error.code === 'ETIMEDOUT') return 'NETWORK_TIMEOUT';
+    if (error.code === 'ECONNREFUSED') return 'CONNECTION_REFUSED';
+    if (error.response && error.response.status === 404) return 'ENDPOINT_NOT_FOUND';
+    if (error.response && error.response.status === 500) return 'MERCHANT_SERVER_ERROR';
+    if (error.response && error.response.status === 429) return 'RATE_LIMITED';
+    if (error.name === 'UcpParseError' || error.name === 'UcpValidationError') return 'INVALID_MANIFEST';
+    return 'UNKNOWN_ERROR';
 }
 
 module.exports = { indexProducts };

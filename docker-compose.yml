@@ -63,7 +63,7 @@ services:
       - public
       - internal
     restart: unless-stopped
-    command: sh -c "npm run migrate && node server.js"
+    command: sh -c "npm run init-db && node server.js"
 
   # MCP Server - AI orchestration middleware
   mcp-server:

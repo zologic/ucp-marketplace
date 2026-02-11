@@ -9,6 +9,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const { requireAuth, requireSuperAdmin } = require('../middleware/auth');
+const { parseManifest, UcpParseError, UcpValidationError, UcpKeyError } = require('../utils/ucpParser');
 
 const JWT_SECRET = process.env.ADMIN_JWT_SECRET;
 
@@ -335,15 +336,19 @@ async function verifyMerchantUCP(merchantId, db) {
     }
 
     const merchant = merchantResult.rows[0];
-    const ucpEndpoint = `${merchant.domain}/.well-known/ucp`;
+    const ucpEndpoint = merchant.ucp_endpoint || `${merchant.domain}/.well-known/ucp`;
 
     try {
         // Fetch UCP manifest
         const response = await axios.get(ucpEndpoint, { timeout: 10000 });
         const manifest = response.data;
 
-        // Validate structure
-        if (!manifest.products_endpoint || !manifest.checkout_endpoint || !manifest.public_key) {
+        // Parse and validate using ucpParser
+        let parsedManifest;
+        try {
+            parsedManifest = parseManifest(manifest);
+        } catch (parseError) {
+            // Update merchant status to pending if manifest invalid
             await db.query(
                 'UPDATE merchants SET status = $1, last_verified_at = NOW() WHERE id = $2',
                 ['pending', merchantId]
@@ -351,25 +356,114 @@ async function verifyMerchantUCP(merchantId, db) {
 
             return {
                 status: 'failed',
-                error: 'Invalid UCP manifest structure'
+                error: `Invalid UCP manifest: ${parseError.message}`,
+                error_code: parseError.name === 'UcpParseError' ? 'INVALID_MANIFEST' : 'VALIDATION_FAILED',
+                verification_results: {
+                    manifest_valid: false,
+                    capabilities_discovered: [],
+                    business_profile_extracted: false,
+                    signing_key_present: false,
+                    summary: 'Verification failed'
+                }
             };
         }
 
-        // Update merchant with UCP info
+        // Check if manifest has changed using hash
+        const currentHash = parsedManifest.manifestHash;
+        const storedHash = merchant.manifest_hash;
+
+        if (currentHash === storedHash && merchant.status === 'verified') {
+            // Manifest unchanged, just update verification timestamp
+            await db.query(
+                'UPDATE merchants SET last_verified_at = NOW() WHERE id = $1',
+                [merchantId]
+            );
+
+            return {
+                status: 'verified',
+                message: 'Manifest unchanged - no updates required',
+                manifest_hash: currentHash,
+                verified_at: new Date().toISOString()
+            };
+        }
+
+        // Update merchant with ALL extracted data from manifest
         await db.query(`
             UPDATE merchants
-            SET ucp_endpoint = $1, public_key = $2, status = $3, last_verified_at = NOW()
-            WHERE id = $4
-        `, [ucpEndpoint, manifest.public_key, 'verified', merchantId]);
+            SET
+                ucp_endpoint = $1,
+                public_key = $2,
+                signing_key_id = $3,
+                business_name = $4,
+                business_description = $5,
+                business_url = $6,
+                service_base_url = $7,
+                ucp_manifest = $8,
+                manifest_hash = $9,
+                manifest_version = $10,
+                status = $11,
+                last_verified_at = NOW(),
+                updated_at = NOW()
+            WHERE id = $12
+        `, [
+            ucpEndpoint,
+            parsedManifest.publicKey,
+            parsedManifest.signingKeyId,
+            parsedManifest.businessProfile.name,
+            parsedManifest.businessProfile.description,
+            parsedManifest.businessProfile.website,
+            parsedManifest.serviceBaseUrl,
+            JSON.stringify(parsedManifest.rawManifest),
+            parsedManifest.manifestHash,
+            parsedManifest.manifestVersion || null,
+            'verified',
+            merchantId
+        ]);
+
+        // Build verification results with capability discovery
+        const capabilityResults = parsedManifest.capabilities;
+
+        // Generate human-readable summary
+        const capabilityNames = {
+            'dev.ucp.shopping.products': 'Products',
+            'dev.ucp.shopping.checkout': 'Checkout',
+            'dev.ucp.shopping.search': 'Search',
+            'dev.ucp.shopping.webhooks': 'Webhooks'
+        };
+
+        const summaryParts = capabilityResults.map(cap => {
+            const name = capabilityNames[cap.name] || cap.name;
+            const status = cap.supported ? 'Supported' : 'Not Found';
+            return `${name}: ${status}`;
+        });
 
         return {
             status: 'verified',
-            ucp_endpoint: ucpEndpoint,
-            public_key: manifest.public_key,
+            merchant: {
+                id: merchantId,
+                business_name: parsedManifest.businessProfile.name,
+                status: 'verified',
+                ucp_endpoint: ucpEndpoint
+            },
+            verification_results: {
+                manifest_valid: true,
+                manifest_hash: parsedManifest.manifestHash,
+                capabilities_discovered: capabilityResults,
+                business_profile_extracted: true,
+                signing_key_present: !!parsedManifest.signingKeyId,
+                summary: summaryParts.join(', ')
+            },
             verified_at: new Date().toISOString()
         };
     } catch (error) {
         console.error('UCP verification failed:', error.message);
+
+        // Determine error code
+        let errorCode = 'UNKNOWN_ERROR';
+        if (error.code === 'ENOTFOUND') errorCode = 'DNS_ERROR';
+        else if (error.code === 'ETIMEDOUT') errorCode = 'TIMEOUT';
+        else if (error.code === 'ECONNREFUSED') errorCode = 'CONNECTION_REFUSED';
+        else if (error.response?.status === 404) errorCode = 'MANIFEST_NOT_FOUND';
 
         await db.query(
             'UPDATE merchants SET last_verified_at = NOW() WHERE id = $1',
@@ -378,7 +472,15 @@ async function verifyMerchantUCP(merchantId, db) {
 
         return {
             status: 'failed',
-            error: error.message
+            error: error.message,
+            error_code: errorCode,
+            verification_results: {
+                manifest_valid: false,
+                capabilities_discovered: [],
+                business_profile_extracted: false,
+                signing_key_present: false,
+                summary: 'Verification failed'
+            }
         };
     }
 }
