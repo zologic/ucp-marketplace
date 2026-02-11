@@ -38,10 +38,10 @@ apiClient.interceptors.response.use(
 
 // Authentication
 export const login = async (email, password) => {
-  const response = await apiClient.post('/auth/login', { email, password });
-  const { token, user } = response.data;
+  const response = await apiClient.post('/login', { email, password });
+  const { token, admin } = response.data;
   localStorage.setItem('admin_token', token);
-  localStorage.setItem('admin_user', JSON.stringify(user));
+  localStorage.setItem('admin_user', JSON.stringify(admin));
   return response.data;
 };
 
