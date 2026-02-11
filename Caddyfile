@@ -31,7 +31,7 @@ bizform.app {
     }
 
     # Admin UI (production - serves from Nginx on port 80)
-    handle /admin-ui/* {
+    handle_path /admin-ui/* {
         reverse_proxy admin:80
     }
 
@@ -73,7 +73,7 @@ bizform.app {
     }
 
     # Route /admin-ui/* requests to admin dashboard (production)
-    handle /admin-ui/* {
+    handle_path /admin-ui/* {
         reverse_proxy admin:80
     }
 
