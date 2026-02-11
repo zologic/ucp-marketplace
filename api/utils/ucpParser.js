@@ -200,12 +200,31 @@ function extractServiceBaseUrl(manifest) {
 
 /**
  * Extract and validate public key from manifest
+ * Supports both old format (public_key string) and new format (signing_keys JWK array)
  */
 function extractPublicKey(manifest) {
+  // Try new format first: signing_keys array with JWK objects
+  if (manifest.signing_keys && Array.isArray(manifest.signing_keys) && manifest.signing_keys.length > 0) {
+    const signingKey = manifest.signing_keys[0]; // Use first key
+
+    // Validate JWK structure
+    if (signingKey.kty !== 'OKP' || signingKey.crv !== 'Ed25519') {
+      throw new UcpKeyError('signing_keys must contain Ed25519 keys (kty: OKP, crv: Ed25519)');
+    }
+
+    if (!signingKey.x || typeof signingKey.x !== 'string') {
+      throw new UcpKeyError('signing_keys entry missing valid "x" (public key) field');
+    }
+
+    // Convert JWK to ed25519:base64 format for consistency
+    return `ed25519:${signingKey.x}`;
+  }
+
+  // Fall back to old format: public_key string
   const publicKey = manifest.public_key;
 
   if (!publicKey || typeof publicKey !== 'string') {
-    throw new UcpParseError('Missing or invalid public_key', 'public_key');
+    throw new UcpParseError('Missing or invalid public_key or signing_keys', 'public_key');
   }
 
   // Validate Ed25519 key format
@@ -224,12 +243,23 @@ function extractPublicKey(manifest) {
 
 /**
  * Extract signing key ID from manifest
+ * Supports both old format (signing_key_id string) and new format (signing_keys[].kid)
  */
 function extractSigningKeyId(manifest) {
+  // Try new format first: signing_keys array with kid field
+  if (manifest.signing_keys && Array.isArray(manifest.signing_keys) && manifest.signing_keys.length > 0) {
+    const signingKey = manifest.signing_keys[0]; // Use first key
+
+    if (signingKey.kid && typeof signingKey.kid === 'string') {
+      return signingKey.kid.trim();
+    }
+  }
+
+  // Fall back to old format: signing_key_id string
   const signingKeyId = manifest.signing_key_id;
 
   if (!signingKeyId || typeof signingKeyId !== 'string' || signingKeyId.trim() === '') {
-    throw new UcpParseError('Missing or invalid signing_key_id', 'signing_key_id');
+    throw new UcpParseError('Missing or invalid signing_key_id or signing_keys[].kid', 'signing_key_id');
   }
 
   return signingKeyId.trim();
