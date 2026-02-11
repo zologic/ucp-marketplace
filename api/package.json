@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "migrate": "node migrate.js"
+    "migrate": "node migrate.js",
+    "init-db": "node ../database/init-db.js"
   },
   "keywords": ["ucp", "commerce", "api"],
   "author": "",
@@ -25,7 +26,8 @@
     "tweetnacl": "^1.0.3",
     "tweetnacl-util": "^0.15.1",
     "stripe": "^17.3.1",
-    "nodemailer": "^6.9.7"
+    "nodemailer": "^6.9.7",
+    "@noble/ed25519": "^2.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
