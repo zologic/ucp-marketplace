@@ -333,9 +333,23 @@ router.post('/checkout', async (req, res) => {
         // Generate referral ID
         const referralId = crypto.randomUUID();
 
-        // Call merchant UCP checkout endpoint (this would normally create the session on merchant side)
-        // For now, we'll create a placeholder checkout URL
-        const checkoutUrl = `${merchant.domain}/checkout?ref=${referralId}`;
+        // Check merchant's UCP manifest for embedded checkout support
+        let supportsEmbeddedCheckout = false;
+        let checkoutUrl = `${merchant.domain}/checkout?ref=${referralId}`;
+
+        if (merchant.ucp_manifest && merchant.ucp_manifest.capabilities) {
+            const embeddedCheckoutCap = merchant.ucp_manifest.capabilities.find(
+                cap => cap.name === 'dev.ucp.shopping.embedded_checkout' && cap.supported === true
+            );
+
+            if (embeddedCheckoutCap && embeddedCheckoutCap.endpoint) {
+                supportsEmbeddedCheckout = true;
+                // Use the merchant's embedded checkout endpoint
+                checkoutUrl = embeddedCheckoutCap.endpoint.includes('?')
+                    ? `${embeddedCheckoutCap.endpoint}&ref=${referralId}`
+                    : `${embeddedCheckoutCap.endpoint}?ref=${referralId}`;
+            }
+        }
 
         // Create checkout session record
         await req.app.locals.db.query(`
@@ -343,11 +357,12 @@ router.post('/checkout', async (req, res) => {
             VALUES ($1, $2, $3, $4, $5, 'created')
         `, [tenantId, merchant_id, product_id, referralId, checkoutUrl]);
 
-        // Return session_id for transparency (client can log it but not reuse it)
+        // Return checkout info with embedded support flag
         res.json({
             checkout_url: checkoutUrl,
             referral_id: referralId,
-            session_id: sessionId // For debugging/logging only
+            session_id: sessionId, // For debugging/logging only
+            embedded_checkout: supportsEmbeddedCheckout // NEW: Tells frontend to use iframe
         });
     } catch (error) {
         console.error('Checkout error:', error);

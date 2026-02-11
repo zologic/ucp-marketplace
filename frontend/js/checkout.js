@@ -1,9 +1,10 @@
 /**
  * Checkout Flow
- * Handles checkout session creation and redirect
+ * Handles checkout session creation with support for redirect and embedded modes
  */
 
 import { showLoading, hideLoading, renderError, showCheckoutRedirect } from './ui.js';
+import { showEmbeddedCheckout } from './embedded-checkout.js';
 
 /**
  * Handle checkout initiation
@@ -88,9 +89,15 @@ export async function handleCheckout(merchantId, productId, selectedVariations =
             sessionStorage.setItem('last_session_id', data.session_id);
         }
 
-        // Show redirect message and redirect
-        hideLoading();
-        showCheckoutRedirect(data.checkout_url);
+        // Check if merchant supports embedded checkout
+        if (data.embedded_checkout) {
+            // Show embedded checkout in iframe
+            showEmbeddedCheckout(data.checkout_url, data.referral_id);
+        } else {
+            // Traditional redirect flow
+            hideLoading();
+            showCheckoutRedirect(data.checkout_url);
+        }
 
     } catch (error) {
         hideLoading();
