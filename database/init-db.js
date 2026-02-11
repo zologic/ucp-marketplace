@@ -66,16 +66,26 @@ async function initDatabase() {
     const defaultDomain = process.env.DOMAIN || 'localhost';
     const defaultRevenuePercentage = parseInt(process.env.TENANT_REVENUE_PERCENTAGE || '80', 10);
 
-    await pool.query(`
-      INSERT INTO tenants (name, domain, revenue_percentage, status)
-      VALUES ($1, $2, $3, 'active')
+    // Insert tenant
+    const tenantResult = await pool.query(`
+      INSERT INTO tenants (name, domain, status)
+      VALUES ($1, $2, 'active')
       ON CONFLICT (domain) DO UPDATE
-        SET name = EXCLUDED.name,
-            revenue_percentage = EXCLUDED.revenue_percentage
+        SET name = EXCLUDED.name
       RETURNING id, name, domain
-    `, [defaultTenantName, defaultDomain, defaultRevenuePercentage]);
+    `, [defaultTenantName, defaultDomain]);
 
-    console.log('[init-db] ✓ Default tenant created: ' + defaultTenantName + ' (' + defaultDomain + ')');
+    const tenantId = tenantResult.rows[0].id;
+
+    // Insert tenant revenue configuration
+    await pool.query(`
+      INSERT INTO tenant_revenue (tenant_id, revenue_share_percent, applies_to, status)
+      VALUES ($1, $2, 'both', 'active')
+      ON CONFLICT (tenant_id) DO UPDATE
+        SET revenue_share_percent = EXCLUDED.revenue_share_percent
+    `, [tenantId, defaultRevenuePercentage]);
+
+    console.log('[init-db] ✓ Default tenant created: ' + defaultTenantName + ' (' + defaultDomain + ') with ' + defaultRevenuePercentage + '% revenue share');
     console.log('[init-db] Database is ready for use');
 
     await pool.end();
