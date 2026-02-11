@@ -323,6 +323,153 @@ router.delete('/merchants/:id', requireAuth, async (req, res) => {
     }
 });
 
+// POST /admin/merchants/:id/recrawl - Trigger product recrawl
+router.post('/merchants/:id/recrawl', requireAuth, async (req, res) => {
+    try {
+        const merchantId = req.params.id;
+
+        // Get merchant details
+        const merchantResult = await req.app.locals.db.query(
+            'SELECT * FROM merchants WHERE id = $1',
+            [merchantId]
+        );
+
+        if (merchantResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Merchant not found' });
+        }
+
+        const merchant = merchantResult.rows[0];
+
+        if (!merchant.service_base_url) {
+            return res.status(400).json({ error: 'Merchant has no service_base_url. Verify UCP manifest first.' });
+        }
+
+        // Construct products endpoint URL
+        const productsUrl = `${merchant.service_base_url}/products`;
+
+        console.log(`[Recrawl] Fetching products from ${productsUrl}`);
+
+        // Fetch products from merchant's UCP endpoint
+        const response = await axios.get(productsUrl, { timeout: 30000 });
+        const productsData = response.data;
+
+        // Extract products array (handle different response formats)
+        let products = [];
+        if (Array.isArray(productsData)) {
+            products = productsData;
+        } else if (productsData.products && Array.isArray(productsData.products)) {
+            products = productsData.products;
+        } else {
+            return res.status(400).json({ error: 'Invalid products response format' });
+        }
+
+        console.log(`[Recrawl] Found ${products.length} products`);
+
+        let insertedCount = 0;
+        let updatedCount = 0;
+        let errorCount = 0;
+
+        // Insert/update products
+        for (const product of products) {
+            try {
+                // Check if product already exists
+                const existingProduct = await req.app.locals.db.query(
+                    'SELECT id FROM products WHERE merchant_id = $1 AND external_id = $2',
+                    [merchantId, product.id]
+                );
+
+                if (existingProduct.rows.length > 0) {
+                    // Update existing product
+                    await req.app.locals.db.query(`
+                        UPDATE products
+                        SET
+                            name = $1,
+                            description = $2,
+                            price_cents = $3,
+                            currency = $4,
+                            category = $5,
+                            brand = $6,
+                            image_url = $7,
+                            stock_status = $8,
+                            indexed_at = NOW()
+                        WHERE merchant_id = $9 AND external_id = $10
+                    `, [
+                        product.name || 'Untitled Product',
+                        product.description || '',
+                        product.price?.amount || 0,
+                        product.price?.currency || 'USD',
+                        product.category || null,
+                        product.brand || null,
+                        product.images?.[0]?.url || product.image_url || null,
+                        product.availability || 'in_stock',
+                        merchantId,
+                        product.id
+                    ]);
+                    updatedCount++;
+                } else {
+                    // Insert new product
+                    await req.app.locals.db.query(`
+                        INSERT INTO products (
+                            merchant_id, tenant_id, external_id, name, description,
+                            price_cents, currency, category, brand, image_url, stock_status, indexed_at
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+                    `, [
+                        merchantId,
+                        merchant.tenant_id,
+                        product.id,
+                        product.name || 'Untitled Product',
+                        product.description || '',
+                        product.price?.amount || 0,
+                        product.price?.currency || 'USD',
+                        product.category || null,
+                        product.brand || null,
+                        product.images?.[0]?.url || product.image_url || null,
+                        product.availability || 'in_stock'
+                    ]);
+                    insertedCount++;
+                }
+            } catch (productError) {
+                console.error(`[Recrawl] Error processing product ${product.id}:`, productError);
+                errorCount++;
+            }
+        }
+
+        // Update merchant's last_indexed_at
+        await req.app.locals.db.query(
+            'UPDATE merchants SET last_indexed_at = NOW() WHERE id = $1',
+            [merchantId]
+        );
+
+        console.log(`[Recrawl] Complete: ${insertedCount} inserted, ${updatedCount} updated, ${errorCount} errors`);
+
+        res.json({
+            success: true,
+            summary: {
+                total: products.length,
+                inserted: insertedCount,
+                updated: updatedCount,
+                errors: errorCount
+            },
+            indexed_at: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Recrawl error:', error);
+
+        let errorMessage = 'Failed to recrawl products';
+        if (error.code === 'ENOTFOUND') {
+            errorMessage = 'Could not connect to merchant API (DNS error)';
+        } else if (error.code === 'ETIMEDOUT') {
+            errorMessage = 'Merchant API request timed out';
+        } else if (error.response?.status === 404) {
+            errorMessage = 'Products endpoint not found';
+        } else if (error.response?.status) {
+            errorMessage = `Merchant API returned ${error.response.status} error`;
+        }
+
+        res.status(500).json({ error: errorMessage, details: error.message });
+    }
+});
+
 // GET /admin/merchants/:id/analytics - Get merchant analytics
 router.get('/merchants/:id/analytics', requireAuth, async (req, res) => {
     try {
