@@ -26,7 +26,7 @@ export default function SystemHealth() {
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
   // Fetch system health
-  const { data: health, isLoading, refetch } = useQuery<SystemHealth>({
+  const { data: health, isLoading, isError, error, refetch } = useQuery<SystemHealth>({
     queryKey: ['system-health'],
     queryFn: async () => {
       const response = await apiClient.get('/health');
@@ -59,6 +59,34 @@ export default function SystemHealth() {
         <div className="h-64 flex items-center justify-center">
           <div className="text-muted-foreground">Loading system health...</div>
         </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold">System Health</h1>
+          <Button variant="outline" size="sm" onClick={handleRefresh}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Retry
+          </Button>
+        </div>
+        <Card className="border-red-500">
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <AlertTriangle className="h-12 w-12 text-red-500" />
+              <div className="text-red-500 text-lg font-semibold">Failed to load system health</div>
+              <p className="text-muted-foreground text-center max-w-md">
+                {error instanceof Error ? error.message : 'Unable to connect to the health API endpoint. The backend service may be down or unreachable.'}
+              </p>
+              <div className="text-sm text-muted-foreground">
+                API Endpoint: GET /admin/health
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }

@@ -61,7 +61,7 @@ export default function Merchants() {
   });
 
   // Fetch merchants
-  const { data: merchants, isLoading } = useQuery<Merchant[]>({
+  const { data: merchants, isLoading, isError, error } = useQuery<Merchant[]>({
     queryKey: ['merchants', statusFilter, searchTerm],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -177,6 +177,30 @@ export default function Merchants() {
         <div className="h-64 flex items-center justify-center">
           <div className="text-muted-foreground">Loading merchants...</div>
         </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold">Merchants</h1>
+        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <div className="text-red-500 text-lg font-semibold">Failed to load merchants</div>
+              <p className="text-muted-foreground text-center max-w-md">
+                {error instanceof Error ? error.message : 'Unable to connect to the API. Please check your connection and try again.'}
+              </p>
+              <Button onClick={() => window.location.reload()}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Retry
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
