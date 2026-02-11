@@ -92,16 +92,42 @@ async function indexProducts(db) {
                 // Upsert products into database with signing_status = 'pending'
                 for (const product of products) {
                     try {
+                        // Process description fields
+                        const descriptionShort = product.description_short ||
+                            (product.description ? product.description.substring(0, 150) + (product.description.length > 150 ? '...' : '') : null);
+                        const descriptionLong = product.description_long || product.description || null;
+
+                        // Process variations field
+                        let variations = [];
+                        let hasVariations = false;
+
+                        if (product.variations && Array.isArray(product.variations) && product.variations.length > 0) {
+                            try {
+                                // Validate variation structure
+                                variations = product.variations.filter(v => v.attribute && Array.isArray(v.options));
+                                hasVariations = variations.length > 0;
+                            } catch (varError) {
+                                console.warn(`[indexProducts] Invalid variations for product ${product.id}:`, varError.message);
+                                variations = [];
+                                hasVariations = false;
+                            }
+                        }
+
                         await db.query(`
                             INSERT INTO products (
                                 merchant_id, tenant_id, external_id, name, description,
+                                description_short, description_long, variations, has_variations,
                                 price_cents, currency, category, brand, image_url, stock_status,
                                 signing_status, indexed_at
                             )
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', NOW())
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'pending', NOW())
                             ON CONFLICT (merchant_id, external_id) DO UPDATE SET
                                 name = EXCLUDED.name,
                                 description = EXCLUDED.description,
+                                description_short = EXCLUDED.description_short,
+                                description_long = EXCLUDED.description_long,
+                                variations = EXCLUDED.variations,
+                                has_variations = EXCLUDED.has_variations,
                                 price_cents = EXCLUDED.price_cents,
                                 currency = EXCLUDED.currency,
                                 category = EXCLUDED.category,
@@ -116,6 +142,10 @@ async function indexProducts(db) {
                             product.id,
                             product.name,
                             product.description || null,
+                            descriptionShort,
+                            descriptionLong,
+                            JSON.stringify(variations),
+                            hasVariations,
                             product.price_cents,
                             product.currency || 'EUR',
                             product.category || null,
