@@ -16,9 +16,9 @@ A production-ready, white-label AI shopping marketplace that connects AI agents 
 ### Components
 
 - **Frontend** - Vanilla JS consumer marketplace (white-label ready)
-- **API** - Node.js/Express backend with tenant resolution
+- **Admin Dashboard** - React 18 + Vite admin interface (Plain JavaScript, NO TypeScript)
+- **API + Worker** - Node.js/Express backend with tenant resolution + background jobs (merged)
 - **MCP Server** - AI agent tool provider with merchant enforcement
-- **Worker** - Background job processing (indexing, billing, analytics)
 - **PostgreSQL** - Primary data store with full-text search
 - **Redis** - Cache and session storage
 - **Caddy** - Reverse proxy with automatic SSL
@@ -27,6 +27,7 @@ A production-ready, white-label AI shopping marketplace that connects AI agents 
 
 - **Backend:** Node.js 20, Express, PostgreSQL 16
 - **Frontend:** Vanilla JavaScript (ES2020+), no frameworks
+- **Admin Dashboard:** React 18, Vite, Plain JavaScript (NO TypeScript, NO UI frameworks)
 - **Infrastructure:** Docker, Docker Compose, Caddy
 - **Protocol:** UCP (Universal Commerce Protocol)
 - **Crypto:** Ed25519 signatures for attribution
@@ -80,15 +81,15 @@ newgrp docker
 
 The setup script deploys these services:
 
-| Service    | Purpose                                      | Port       |
-|------------|----------------------------------------------|------------|
-| Caddy      | Reverse proxy + automatic SSL                | 80, 443    |
-| Frontend   | Consumer search + chat UI                     | Internal   |
-| API        | REST API (search, admin, billing)            | Internal   |
-| MCP Server | AI orchestration middleware                   | Internal   |
-| Worker     | Background jobs (billing, indexing, etc.)    | Internal   |
-| PostgreSQL | Primary database                              | Internal   |
-| Redis      | Rate limiting + caching                       | Internal   |
+| Service        | Purpose                                      | Port       |
+|----------------|----------------------------------------------|------------|
+| Caddy          | Reverse proxy + automatic SSL                | 80, 443    |
+| Frontend       | Consumer search + chat UI                    | Internal   |
+| Admin          | Admin dashboard (React + Vite)               | Internal   |
+| API + Worker   | REST API + background jobs (merged)          | Internal   |
+| MCP Server     | AI orchestration middleware                  | Internal   |
+| PostgreSQL     | Primary database                             | Internal   |
+| Redis          | Rate limiting + caching                      | Internal   |
 
 All services run in isolated Docker networks. Only Caddy is exposed publicly.
 
