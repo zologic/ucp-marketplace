@@ -162,18 +162,33 @@ function extractBusinessProfile(manifest) {
  * Extract and validate service base URL from manifest
  */
 function extractServiceBaseUrl(manifest) {
-  if (!manifest.services || typeof manifest.services !== 'object') {
-    throw new UcpParseError('Missing or invalid services object', 'services');
+  if (!manifest.services) {
+    throw new UcpParseError('Missing services', 'services');
   }
 
-  const baseUrl = manifest.services.base_url;
+  let baseUrl;
+
+  // Handle both old format (services.base_url) and new format (services[].transports[].base_url)
+  if (typeof manifest.services === 'object' && manifest.services.base_url) {
+    // Old format: services.base_url
+    baseUrl = manifest.services.base_url;
+  } else if (Array.isArray(manifest.services)) {
+    // New format: services[].transports[].base_url
+    const shoppingService = manifest.services.find(s => s.name === 'shopping');
+    if (shoppingService && Array.isArray(shoppingService.transports)) {
+      const restTransport = shoppingService.transports.find(t => t.type === 'rest');
+      if (restTransport && restTransport.base_url) {
+        baseUrl = restTransport.base_url;
+      }
+    }
+  }
 
   if (!baseUrl || typeof baseUrl !== 'string') {
-    throw new UcpParseError('Missing or invalid services.base_url', 'services.base_url');
+    throw new UcpParseError('Missing or invalid service base_url. Expected services.base_url or services[].transports[].base_url', 'services.base_url');
   }
 
   if (!isValidUrl(baseUrl)) {
-    throw new UcpValidationError('services.base_url must be a valid URL', {
+    throw new UcpValidationError('Service base_url must be a valid URL', {
       field: 'services.base_url',
       value: baseUrl
     });
