@@ -330,7 +330,7 @@ router.post('/checkout', async (req, res) => {
 
         // Check merchant's UCP manifest for embedded checkout support
         let supportsEmbeddedCheckout = false;
-        let checkoutUrl = `${merchant.domain}/checkout?ref=${referralId}`;
+        let checkoutUrl = `https://${merchant.domain}/checkout?ref=${referralId}`;
 
         if (merchant.ucp_manifest && merchant.ucp_manifest.capabilities) {
             const embeddedCheckoutCap = merchant.ucp_manifest.capabilities.find(
