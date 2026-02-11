@@ -769,18 +769,18 @@ p {
   backdrop-filter: blur(10px);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
-  padding: var(--space-lg);
-  margin-bottom: var(--space-lg);
+  padding: var(--space-xl);
+  margin-bottom: var(--space-xl);
 }
 
 .filters-row {
   display: grid;
-  grid-template-columns: 180px 180px 1fr auto;
-  gap: var(--space-md);
+  grid-template-columns: 200px 200px 1fr 140px;
+  gap: var(--space-lg);
   align-items: end;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1200px) {
   .filters-row {
     grid-template-columns: 1fr 1fr;
   }
@@ -795,6 +795,8 @@ p {
 .filter-group {
   display: flex;
   flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
 }
 
 /* 19. Details Modal */

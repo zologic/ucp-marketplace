@@ -64,46 +64,77 @@ router.post('/login', async (req, res) => {
 // GET /admin/merchants - List all merchants
 router.get('/merchants', requireAuth, async (req, res) => {
     try {
-        const { tenant_id, status, search, limit = 50, offset = 0 } = req.query;
+        const { tenant_id, status, billing_status, search, limit = 20, page = 1 } = req.query;
 
-        let query = `
-            SELECT m.*, t.name as tenant_name, t.domain as tenant_domain,
-                   mb.status as billing_status, mb.billing_mode
-            FROM merchants m
-            JOIN tenants t ON m.tenant_id = t.id
-            LEFT JOIN merchant_billing mb ON m.id = mb.merchant_id
-            WHERE 1=1
-        `;
+        // Calculate offset from page
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const offset = (pageNum - 1) * limitNum;
 
+        // Build WHERE clause
+        let whereClause = 'WHERE 1=1';
         const params = [];
         let paramIndex = 1;
 
         if (tenant_id) {
-            query += ` AND m.tenant_id = $${paramIndex}`;
+            whereClause += ` AND m.tenant_id = $${paramIndex}`;
             params.push(tenant_id);
             paramIndex++;
         }
 
         if (status) {
-            query += ` AND m.status = $${paramIndex}`;
+            whereClause += ` AND m.status = $${paramIndex}`;
             params.push(status);
             paramIndex++;
         }
 
+        if (billing_status) {
+            whereClause += ` AND mb.status = $${paramIndex}`;
+            params.push(billing_status);
+            paramIndex++;
+        }
+
         if (search) {
-            query += ` AND m.domain ILIKE $${paramIndex}`;
+            whereClause += ` AND m.domain ILIKE $${paramIndex}`;
             params.push(`%${search}%`);
             paramIndex++;
         }
 
-        query += ` ORDER BY m.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
-        params.push(parseInt(limit), parseInt(offset));
+        // Get total count for pagination
+        const countQuery = `
+            SELECT COUNT(*) as total
+            FROM merchants m
+            JOIN tenants t ON m.tenant_id = t.id
+            LEFT JOIN merchant_billing mb ON m.id = mb.merchant_id
+            ${whereClause}
+        `;
+        const countResult = await req.app.locals.db.query(countQuery, params);
+        const totalCount = parseInt(countResult.rows[0].total);
+        const totalPages = Math.ceil(totalCount / limitNum);
 
-        const result = await req.app.locals.db.query(query, params);
+        // Get paginated data
+        const dataQuery = `
+            SELECT m.*, t.name as tenant_name, t.domain as tenant_domain,
+                   mb.status as billing_status, mb.billing_mode,
+                   (SELECT COUNT(*) FROM products p WHERE p.merchant_id = m.id) as products_count
+            FROM merchants m
+            JOIN tenants t ON m.tenant_id = t.id
+            LEFT JOIN merchant_billing mb ON m.id = mb.merchant_id
+            ${whereClause}
+            ORDER BY m.created_at DESC
+            LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+        `;
+        params.push(limitNum, offset);
+
+        const result = await req.app.locals.db.query(dataQuery, params);
 
         res.json({
             merchants: result.rows,
-            count: result.rows.length
+            count: result.rows.length,
+            total: totalCount,
+            page: pageNum,
+            limit: limitNum,
+            total_pages: totalPages
         });
     } catch (error) {
         console.error('List merchants error:', error);
@@ -704,39 +735,62 @@ router.patch('/merchants/:id', requireAuth, async (req, res) => {
 // GET /admin/tenants - List all tenants
 router.get('/tenants', requireAuth, async (req, res) => {
     try {
-        const { search, status, limit = 50, offset = 0 } = req.query;
+        const { search, status, limit = 20, page = 1 } = req.query;
 
-        let query = `
-            SELECT t.*,
-                   COUNT(m.id) as merchant_count
-            FROM tenants t
-            LEFT JOIN merchants m ON m.tenant_id = t.id
-            WHERE 1=1
-        `;
+        // Calculate offset from page
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const offset = (pageNum - 1) * limitNum;
 
+        // Build WHERE clause
+        let whereClause = 'WHERE 1=1';
         const params = [];
         let paramIndex = 1;
 
         if (search) {
-            query += ` AND (t.domain ILIKE $${paramIndex} OR t.name ILIKE $${paramIndex})`;
+            whereClause += ` AND (t.domain ILIKE $${paramIndex} OR t.name ILIKE $${paramIndex})`;
             params.push(`%${search}%`);
             paramIndex++;
         }
 
         if (status) {
-            query += ` AND t.status = $${paramIndex}`;
+            whereClause += ` AND t.status = $${paramIndex}`;
             params.push(status);
             paramIndex++;
         }
 
-        query += ` GROUP BY t.id ORDER BY t.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
-        params.push(parseInt(limit), parseInt(offset));
+        // Get total count for pagination
+        const countQuery = `
+            SELECT COUNT(*) as total
+            FROM tenants t
+            ${whereClause}
+        `;
+        const countResult = await req.app.locals.db.query(countQuery, params);
+        const totalCount = parseInt(countResult.rows[0].total);
+        const totalPages = Math.ceil(totalCount / limitNum);
 
-        const result = await req.app.locals.db.query(query, params);
+        // Get paginated data
+        const dataQuery = `
+            SELECT t.*,
+                   COUNT(m.id) as merchants_count
+            FROM tenants t
+            LEFT JOIN merchants m ON m.tenant_id = t.id
+            ${whereClause}
+            GROUP BY t.id
+            ORDER BY t.created_at DESC
+            LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+        `;
+        params.push(limitNum, offset);
+
+        const result = await req.app.locals.db.query(dataQuery, params);
 
         res.json({
             tenants: result.rows,
-            count: result.rows.length
+            count: result.rows.length,
+            total: totalCount,
+            page: pageNum,
+            limit: limitNum,
+            total_pages: totalPages
         });
     } catch (error) {
         console.error('List tenants error:', error);
