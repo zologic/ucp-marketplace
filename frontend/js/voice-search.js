@@ -162,14 +162,32 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
             const recognitionDuration = Date.now() - recognitionStartTime;
             console.log('Speech recognition ended', { duration: recognitionDuration + 'ms' });
 
-            // ANDROID FIX: If recognition ended immediately (< 500ms), this is likely
-            // a premature end from Android. Don't reset UI immediately.
+            // Get current transcript
+            const transcript = searchInput.value.trim();
+
+            // ANDROID FIX: If recognition ended quickly but we have transcript, trigger search
             if (recognitionDuration < 500 && isListening) {
                 console.warn('ANDROID: Recognition ended prematurely after', recognitionDuration, 'ms');
-                // Keep UI in listening state for a moment to avoid flashing
+
+                // If we have transcript, trigger search immediately
+                if (transcript && onComplete) {
+                    console.log('ANDROID: Triggering search with transcript:', transcript);
+                    searchInput.classList.remove('transcribing');
+                    onComplete(transcript);
+                    isListening = false;
+                    resetUIToIdle();
+                    return;
+                }
+
+                // No transcript yet - keep UI in listening state briefly
                 setTimeout(() => {
                     if (isListening) {
-                        // If still listening after delay, reset
+                        const delayedTranscript = searchInput.value.trim();
+                        if (delayedTranscript && onComplete) {
+                            console.log('ANDROID: Late transcript found, triggering search');
+                            searchInput.classList.remove('transcribing');
+                            onComplete(delayedTranscript);
+                        }
                         isListening = false;
                         resetUIToIdle();
                     }
@@ -177,14 +195,12 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
                 return;
             }
 
-            if (mode === 'toggle' && isListening) {
-                // In toggle mode, if manually stopped, trigger search
-                const transcript = searchInput.value.trim();
-                if (transcript) {
-                    searchInput.classList.remove('transcribing');
-                    if (onComplete) {
-                        onComplete(transcript);
-                    }
+            // Normal flow: trigger search if we have transcript
+            if (transcript) {
+                searchInput.classList.remove('transcribing');
+                if (onComplete) {
+                    console.log('Triggering search with transcript:', transcript);
+                    onComplete(transcript);
                 }
             }
 
