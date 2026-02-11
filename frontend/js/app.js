@@ -16,6 +16,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchButton = document.getElementById('search-button');
     const micButton = document.getElementById('mic-button');
     const searchPill = document.querySelector('.search-pill');
+    const clearButton = document.getElementById('clear-button');
+
+    // Initialize pill in centered state
+    if (searchPill) {
+        searchPill.classList.add('centered');
+    }
 
     // Handle search on Enter key
     searchInput.addEventListener('keypress', (e) => {
@@ -33,6 +39,30 @@ document.addEventListener('DOMContentLoaded', () => {
         if (query) {
             handleSearch(query, API_BASE);
         }
+    });
+
+    // Show/hide clear button based on input content
+    searchInput.addEventListener('input', () => {
+        clearError();
+        if (searchInput.value.trim().length > 0) {
+            clearButton.classList.remove('hidden');
+        } else {
+            clearButton.classList.add('hidden');
+        }
+    });
+
+    // Clear button click handler
+    clearButton.addEventListener('click', () => {
+        searchInput.value = '';
+        clearButton.classList.add('hidden');
+
+        // If voice is active, stop it
+        if (window.voiceSearchInstance && window.voiceSearchInstance.isListening()) {
+            window.voiceSearchInstance.stop();
+        }
+
+        // Trigger reset animation (move pill back to center, hide results)
+        resetSearchState();
     });
 
     // Initialize voice search
@@ -56,10 +86,62 @@ document.addEventListener('DOMContentLoaded', () => {
         );
     }
 
-    // Clear errors when typing
-    searchInput.addEventListener('input', () => {
-        clearError();
-    });
+    // Reset search state - return pill to center, hide results
+    function resetSearchState() {
+        const resultsSection = document.getElementById('results-section');
+        const trustIndicators = document.querySelector('.trust-indicators');
+
+        // Remove sticky, add centered (triggers CSS transition)
+        searchPill.classList.remove('sticky');
+        searchPill.classList.add('centered');
+
+        // Show trust indicators again
+        if (trustIndicators) {
+            trustIndicators.classList.remove('hidden-for-results');
+        }
+
+        // Fade out results simultaneously (using setTimeout for slight delay)
+        setTimeout(() => {
+            resultsSection.classList.add('hidden');
+        }, 100);
+    }
+
+    // Placeholder navigation mode for footer links
+    function initPlaceholderNavigation() {
+        const footerLinks = document.querySelectorAll('.footer a');
+
+        footerLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault(); // Stop actual navigation
+
+                const href = link.getAttribute('href');
+                const pageName = href.replace('.html', '').replace('/', '');
+
+                // Update URL with pushState (browser back button will work)
+                window.history.pushState(
+                    { page: pageName },
+                    pageName,
+                    href
+                );
+
+                // Optional: Show visual indication that link was clicked
+                console.log(`Navigated to ${href} (placeholder mode)`);
+            });
+        });
+
+        // Handle browser back/forward buttons
+        window.addEventListener('popstate', (e) => {
+            if (e.state && e.state.page) {
+                console.log(`Browser navigation to ${e.state.page} (placeholder mode)`);
+            } else {
+                // Back to home state
+                console.log('Browser navigation to home (placeholder mode)');
+            }
+        });
+    }
+
+    // Call during initialization
+    initPlaceholderNavigation();
 
     // Global error handler
     window.addEventListener('error', (e) => {
