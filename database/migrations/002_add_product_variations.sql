@@ -30,18 +30,31 @@ CREATE INDEX idx_products_has_variations ON products(has_variations) WHERE has_v
 -- Add GIN index for JSONB variation searches
 CREATE INDEX idx_products_variations_gin ON products USING gin(variations);
 
--- Update full-text search index to include new description fields
+-- ============================================================================
+-- PERFORMANCE OPTIMIZATION: Generated Column with Weighted Search
+-- ============================================================================
+-- Using a GENERATED column with weighted tsvector for sub-100ms search performance
+-- Weights: A (highest) = name, brand; B = category; C = descriptions
+-- This eliminates recalculation overhead on every search query
+
+-- Add generated search vector column with weighted ranking
+ALTER TABLE products
+    ADD COLUMN search_vector tsvector
+    GENERATED ALWAYS AS (
+        setweight(to_tsvector('english', COALESCE(name, '')), 'A') ||
+        setweight(to_tsvector('english', COALESCE(brand, '')), 'A') ||
+        setweight(to_tsvector('english', COALESCE(category, '')), 'B') ||
+        setweight(to_tsvector('english', COALESCE(description_short, '')), 'C') ||
+        setweight(to_tsvector('english', COALESCE(description_long, '')), 'C') ||
+        setweight(to_tsvector('english', COALESCE(description, '')), 'C')
+    ) STORED;
+
+-- Create GIN index on the generated column (much faster than function-based index)
 DROP INDEX IF EXISTS idx_products_search;
-CREATE INDEX idx_products_search ON products USING GIN (
-    to_tsvector('english',
-        COALESCE(name, '') || ' ' ||
-        COALESCE(description, '') || ' ' ||
-        COALESCE(description_short, '') || ' ' ||
-        COALESCE(description_long, '') || ' ' ||
-        COALESCE(category, '') || ' ' ||
-        COALESCE(brand, '')
-    )
-);
+CREATE INDEX idx_products_search_vector ON products USING GIN (search_vector);
+
+-- Add comment explaining the weighted search
+COMMENT ON COLUMN products.search_vector IS 'Generated tsvector for weighted full-text search. Weights: A=name/brand (highest), B=category, C=descriptions. Updated automatically on row changes.';
 
 -- ============================================================================
 -- Migration Complete

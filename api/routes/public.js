@@ -68,12 +68,7 @@ router.post('/search', async (req, res) => {
 
             WHERE p.tenant_id = $1
               AND p.merchant_id = ANY($2::uuid[])
-              AND to_tsvector('english', COALESCE(p.name, '') || ' ' ||
-                                         COALESCE(p.description, '') || ' ' ||
-                                         COALESCE(p.description_short, '') || ' ' ||
-                                         COALESCE(p.description_long, '') || ' ' ||
-                                         COALESCE(p.category, '') || ' ' ||
-                                         COALESCE(p.brand, '')) @@ plainto_tsquery('english', $3)
+              AND p.search_vector @@ plainto_tsquery('english', $3)
         `;
 
         const queryParams = [tenantId, merchants.map(m => m.id), query];
