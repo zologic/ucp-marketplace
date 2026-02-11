@@ -144,12 +144,22 @@ body {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     flex-shrink: 0;
     box-shadow: 0 0 10px rgba(63, 185, 80, 0.15);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .mic-button:hover {
-    background: rgba(63, 185, 80, 0.1);
+    background: rgba(63, 185, 80, 0.15);
     box-shadow: 0 0 20px rgba(63, 185, 80, 0.3);
     transform: scale(1.05);
+}
+
+.mic-button:active {
+    background: rgba(63, 185, 80, 0.2);
+    transform: scale(0.98);
+    box-shadow: 0 0 15px rgba(63, 185, 80, 0.25);
 }
 
 .mic-button.active {
@@ -221,7 +231,13 @@ body {
 }
 
 .mic-button.active .fa-microphone {
-    display: none;
+    opacity: 0.8;
+    animation: mic-icon-pulse 1.5s infinite;
+}
+
+@keyframes mic-icon-pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
 }
 
 .search-button {
@@ -288,6 +304,7 @@ body {
     left: 50%;
     transform: translateX(-50%);
     max-width: 720px;
+    width: 100%;
     padding: 0 20px;
     display: flex;
     align-items: center;
@@ -308,10 +325,38 @@ body {
     color: rgba(255, 255, 255, 0.2);
 }
 
+.trust-indicators b {
+    color: #9ca3af;
+    font-weight: 600;
+}
+
+.trust-indicators .fa-bolt {
+    color: #3fb950;
+    font-size: 12px;
+    margin-right: 4px;
+}
+
 @media (max-width: 640px) {
     .trust-indicators {
-        font-size: 13px;
+        font-size: 12px;
         gap: 6px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        text-align: center;
+    }
+
+    .trust-indicators::-webkit-scrollbar {
+        display: none;
+    }
+
+    .trust-indicators span {
+        white-space: nowrap;
+    }
+
+    .trust-indicators .fa-bolt {
+        font-size: 11px;
     }
 }
 
@@ -736,6 +781,20 @@ button:focus-visible {
 
 .voice-waves span:nth-child(4) {
     animation-delay: 0.3s;
+}
+
+/* Mobile touch optimization - disable hover on touch devices */
+@media (hover: none) and (pointer: coarse) {
+    .mic-button:hover {
+        background: rgba(63, 185, 80, 0.1);
+        transform: none;
+        box-shadow: 0 0 10px rgba(63, 185, 80, 0.15);
+    }
+
+    .mic-button:hover::before,
+    .mic-button:hover::after {
+        opacity: 0;
+    }
 }
 
 /* Accessibility: Respect reduced motion preference */
