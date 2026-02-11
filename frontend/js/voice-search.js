@@ -270,6 +270,12 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
             return;
         }
 
+        // CRITICAL: Set state BEFORE start() so onend can see it
+        isButtonHeld = true;
+        restartAttempts = 0;
+        pressStartTime = Date.now();
+        console.log('State set BEFORE start, isButtonHeld:', isButtonHeld);
+
         // Create recognition object
         console.log('Creating recognition object');
         finalTranscript = '';
@@ -278,10 +284,11 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
         if (!recognition) {
             console.error('Failed to create recognition object');
             updateStatusText('Voice search not available');
+            isButtonHeld = false;
             return;
         }
 
-        // CRITICAL: START IMMEDIATELY - must be first synchronous operation
+        // CRITICAL: START IMMEDIATELY
         console.log('Attempting to start recognition...');
         try {
             recognition.start();
@@ -290,15 +297,13 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
             console.error('Failed to start recognition:', error);
             updateStatusText('Failed to start voice search: ' + error.message);
             setTimeout(() => updateStatusText(''), 3000);
+            isButtonHeld = false;
             return;
         }
 
-        // State management AFTER start() is called
-        isButtonHeld = true;
-        restartAttempts = 0;
-        pressStartTime = Date.now();
+        // Set listening state AFTER start() succeeds
         isListening = true;
-        console.log('State updated, isListening:', isListening, 'isButtonHeld:', isButtonHeld);
+        console.log('isListening set to true');
 
         // UI updates AFTER start() is called
         showVoiceWaves();
