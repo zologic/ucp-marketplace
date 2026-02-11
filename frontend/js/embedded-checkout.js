@@ -99,6 +99,8 @@ export function showEmbeddedCheckout(checkoutUrl, referralId) {
  * @returns {Function} Message handler function
  */
 function setupMessageHandler(referralId, iframe) {
+    let privateChannel = null; // MessagePort for upgraded communication
+
     return function(event) {
         // Security: Verify message origin if needed
         // In production, you should validate event.origin matches merchant domain
@@ -107,12 +109,29 @@ function setupMessageHandler(referralId, iframe) {
             return;
         }
 
-        const { type, status, data } = event.data;
+        const { type, status, data, upgrade } = event.data;
 
         switch (type) {
             case 'ec.ready':
                 // Merchant iframe is ready
                 console.log('[EmbeddedCheckout] Merchant checkout ready');
+
+                // UCP 2026: Check for MessagePort channel upgrade request
+                if (upgrade && upgrade.port && event.ports && event.ports[0]) {
+                    privateChannel = event.ports[0];
+                    console.log('[EmbeddedCheckout] Channel upgraded to MessagePort');
+
+                    // Setup listener on private channel
+                    privateChannel.onmessage = (e) => {
+                        handlePrivateChannelMessage(e.data);
+                    };
+
+                    // Acknowledge upgrade
+                    privateChannel.postMessage({
+                        type: 'ec.marketplace.upgraded',
+                        referralId: referralId
+                    });
+                }
                 break;
 
             case 'ec.resize':
@@ -147,6 +166,46 @@ function setupMessageHandler(referralId, iframe) {
                 console.log('[EmbeddedCheckout] Unknown message type:', type);
         }
     };
+
+    /**
+     * Handle messages from private MessagePort channel
+     * @param {Object} message - Message data from private channel
+     */
+    function handlePrivateChannelMessage(message) {
+        if (!message || typeof message !== 'object') {
+            return;
+        }
+
+        const { type, data } = message;
+
+        switch (type) {
+            case 'ec.resize':
+                if (data && data.height) {
+                    iframe.style.height = `${data.height}px`;
+                }
+                break;
+
+            case 'ec.checkout.complete':
+                console.log('[EmbeddedCheckout] Checkout completed (secure channel)', data);
+                handleCheckoutComplete(data);
+                break;
+
+            case 'ec.checkout.cancelled':
+                console.log('[EmbeddedCheckout] Checkout cancelled (secure channel)');
+                closeEmbeddedCheckout();
+                renderError('Checkout was cancelled. You can try again.');
+                break;
+
+            case 'ec.checkout.error':
+                console.error('[EmbeddedCheckout] Checkout error (secure channel)', data);
+                closeEmbeddedCheckout();
+                renderError(data?.message || 'An error occurred during checkout. Please try again.');
+                break;
+
+            default:
+                console.log('[EmbeddedCheckout] Unknown private channel message:', type);
+        }
+    }
 }
 
 /**
