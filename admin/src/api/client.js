@@ -103,6 +103,10 @@ export const recrawlMerchant = (id) => {
   return apiClient.post(`/merchants/${id}/recrawl`);
 };
 
+export const verifyMerchant = (id) => {
+  return apiClient.post(`/merchants/${id}/verify`);
+};
+
 // Analytics
 export const getAnalytics = (params) => {
   return apiClient.get('/analytics', { params });

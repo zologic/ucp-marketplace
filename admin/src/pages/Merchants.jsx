@@ -10,7 +10,8 @@ import {
   deleteMerchant,
   suspendMerchant,
   activateMerchant,
-  recrawlMerchant
+  recrawlMerchant,
+  verifyMerchant
 } from '../api/client.js';
 
 function Merchants() {
@@ -85,15 +86,32 @@ function Merchants() {
     try {
       // Call create merchant API which verifies UCP
       const response = await createMerchant({ domain: formData.domain });
-      setUcpStatus('success');
-      setUcpError('');
-      // Update form with returned merchant data
-      if (response.data.name) {
-        setFormData(prev => ({ ...prev, name: response.data.name }));
+
+      // Check verification result
+      if (response.data.verification?.status === 'verified' || response.data.merchant?.status === 'verified') {
+        setUcpStatus('success');
+        setUcpError('');
+
+        // Update form with business_name from verification
+        const merchantData = response.data.merchant;
+        if (merchantData?.business_name) {
+          setFormData(prev => ({ ...prev, name: merchantData.business_name }));
+        }
+
+        // Close modal and refresh list since merchant was created and verified
+        setIsAddModalOpen(false);
+        resetForm();
+        fetchMerchants();
+      } else {
+        // Verification failed
+        setUcpStatus('error');
+        const errorMsg = response.data.verification?.error || 'UCP verification failed';
+        setUcpError(errorMsg);
       }
     } catch (err) {
       setUcpStatus('error');
-      setUcpError(err.response?.data?.message || 'UCP verification failed. Please check the domain and try again.');
+      const errorMsg = err.response?.data?.error || 'UCP verification failed. Please check the domain and try again.';
+      setUcpError(errorMsg);
     } finally {
       setUcpVerifying(false);
     }
@@ -170,6 +188,20 @@ function Merchants() {
       alert('Product recrawl initiated. This may take a few minutes.');
     } catch (err) {
       setError('Failed to initiate recrawl');
+    }
+  };
+
+  const handleReverifyMerchant = async (merchant) => {
+    try {
+      const response = await verifyMerchant(merchant.id);
+      if (response.data.status === 'verified') {
+        alert('Merchant verified successfully!');
+      } else {
+        alert(`Verification failed: ${response.data.error || 'Unknown error'}`);
+      }
+      fetchMerchants();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to verify merchant');
     }
   };
 
@@ -278,7 +310,17 @@ function Merchants() {
               <Button variant="success" size="sm" onClick={() => handleApproveMerchant(row)}>
                 Approve
               </Button>
-              <Button variant="outline" size="sm" onClick={() => handleVerifyUcp()}>
+              <Button variant="outline" size="sm" onClick={() => handleReverifyMerchant(row)}>
+                Re-verify
+              </Button>
+            </>
+          )}
+          {row.status === 'verified' && (
+            <>
+              <Button variant="success" size="sm" onClick={() => handleApproveMerchant(row)}>
+                Activate
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => handleReverifyMerchant(row)}>
                 Re-verify
               </Button>
             </>
