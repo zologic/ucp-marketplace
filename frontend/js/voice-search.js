@@ -211,32 +211,7 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
         return rec;
     }
 
-    /**
-     * Start recording
-     * CRITICAL: recognition.start() must be called immediately for Android
-     */
-    function startRecording() {
-        try {
-            finalTranscript = '';
-            recognition = createRecognition();
-
-            // CRITICAL FOR ANDROID: Start recognition immediately in user gesture
-            // Any delay breaks Android's user activation requirement
-            recognition.start();
-
-            // UI updates can happen after start() is called
-            showVoiceWaves();
-            setSearchPillActive(true);
-            micButton.classList.add('active');
-            micButton.classList.add('recording');
-
-        } catch (error) {
-            console.error('Failed to start recognition:', error);
-            updateStatusText('Voice search failed. Please try again.');
-            setTimeout(() => updateStatusText(''), 3000);
-            resetUIToIdle();
-        }
-    }
+    // startRecording() removed - inlined into handlePointerDown for immediate execution
 
     /**
      * Stop recording
@@ -303,6 +278,7 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
 
     /**
      * Handle pointer down (start press)
+     * CRITICAL: recognition.start() must be FIRST for Android User Activation
      */
     function handlePointerDown(e) {
         e.preventDefault();
@@ -310,11 +286,30 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
         // Ignore if already listening
         if (isListening) return;
 
-        // Track press start time for minimum duration check
-        pressStartTime = Date.now();
+        // ANDROID FIX: Start recognition IMMEDIATELY - before any other logic
+        // Android kills microphone if start() isn't the first operation after touch
+        finalTranscript = '';
+        recognition = createRecognition();
 
-        // Start recording immediately
-        startRecording();
+        try {
+            // START FIRST - this must be immediate for Android
+            recognition.start();
+        } catch (error) {
+            console.error('Failed to start recognition:', error);
+            updateStatusText('Voice search failed. Please try again.');
+            setTimeout(() => updateStatusText(''), 3000);
+            return;
+        }
+
+        // Now handle timing and UI updates AFTER start() has been called
+        pressStartTime = Date.now();
+        isListening = true;
+
+        // UI updates can happen after start() is called
+        showVoiceWaves();
+        setSearchPillActive(true);
+        micButton.classList.add('active');
+        micButton.classList.add('recording');
     }
 
     /**
