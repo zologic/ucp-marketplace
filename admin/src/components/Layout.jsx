@@ -1,10 +1,21 @@
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { getCurrentUser, logout } from '../api/client.js';
+import React, { useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { getCurrentUser, logout, isAuthenticated } from '../api/client.js';
 
 function Layout({ children }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const user = getCurrentUser();
+
+  // Auth guard: Check for valid token on mount and route changes
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      // Token is missing or expired - redirect to login
+      localStorage.removeItem('admin_token');
+      localStorage.removeItem('admin_user');
+      window.location.href = '/admin-ui/login';
+    }
+  }, [location.pathname, navigate]);
 
   const navItems = [
     { path: '/', label: 'Dashboard', icon: 'fa-gauge-high' },
