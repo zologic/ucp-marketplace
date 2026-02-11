@@ -17,6 +17,9 @@ RUN npm ci --only=production
 # Copy application code
 COPY api/ .
 
+# Copy worker code (for background jobs when RUN_WORKER=true)
+COPY worker/ /worker
+
 # Copy database migrations to /database and scripts to /app
 COPY --chown=nodejs:nodejs database/ /database
 COPY --chown=nodejs:nodejs database/migrations_archive/migrate.js /app/migrate.js
