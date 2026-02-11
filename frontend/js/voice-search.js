@@ -35,6 +35,7 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
     let pressStartTime = 0;
     let mode = null; // 'hold' or 'toggle'
     let finalTranscript = '';
+    let recognitionStartTime = 0; // Track when recognition actually started
 
     // Get UI elements
     const voiceWaves = micButton.querySelector('.voice-waves');
@@ -54,6 +55,7 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
         rec.onstart = () => {
             console.log('Speech recognition started successfully');
             isListening = true;
+            recognitionStartTime = Date.now(); // Track start time
 
             // ANDROID: Confirm to user that mic is active
             updateStatusText('🎤 Listening...');
@@ -115,7 +117,6 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
             console.error('Speech recognition error:', event.error, event);
 
             let errorMessage = '';
-            let shouldHideMic = false;
 
             switch (event.error) {
                 case 'no-speech':
@@ -125,15 +126,16 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
                     errorMessage = 'No microphone found. Please check your device.';
                     break;
                 case 'not-allowed':
-                    errorMessage = 'Microphone blocked. Enable in browser settings.';
-                    shouldHideMic = true;
+                    // ANDROID FIX: Don't hide button - just show error and let user retry
+                    errorMessage = 'Microphone blocked. Enable in settings and try again.';
                     console.error('ANDROID: Microphone permission denied or user activation lost');
                     break;
                 case 'network':
                     errorMessage = 'Network error. Check connection and try again.';
                     break;
                 case 'service-not-allowed':
-                    errorMessage = 'Speech service not available. Try again.';
+                    // ANDROID FIX: Don't hide button on this error - just let user retry
+                    errorMessage = 'Voice service unavailable. Please try again.';
                     console.error('ANDROID: Speech service rejected - may be user activation issue');
                     break;
                 case 'aborted':
@@ -151,16 +153,29 @@ export function initVoiceSearch(searchInput, micButton, searchPill, onTranscript
                 setTimeout(() => updateStatusText(''), 4000);
             }
 
-            // Hide mic button only for permanent permission denial
-            if (shouldHideMic && micButton) {
-                micButton.style.display = 'none';
-            }
-
+            // ANDROID FIX: Never hide the mic button - just reset UI state
+            // Let the browser handle permanent permission blocking
             resetUIToIdle();
         };
 
         rec.onend = () => {
-            console.log('Speech recognition ended');
+            const recognitionDuration = Date.now() - recognitionStartTime;
+            console.log('Speech recognition ended', { duration: recognitionDuration + 'ms' });
+
+            // ANDROID FIX: If recognition ended immediately (< 500ms), this is likely
+            // a premature end from Android. Don't reset UI immediately.
+            if (recognitionDuration < 500 && isListening) {
+                console.warn('ANDROID: Recognition ended prematurely after', recognitionDuration, 'ms');
+                // Keep UI in listening state for a moment to avoid flashing
+                setTimeout(() => {
+                    if (isListening) {
+                        // If still listening after delay, reset
+                        isListening = false;
+                        resetUIToIdle();
+                    }
+                }, 300);
+                return;
+            }
 
             if (mode === 'toggle' && isListening) {
                 // In toggle mode, if manually stopped, trigger search
