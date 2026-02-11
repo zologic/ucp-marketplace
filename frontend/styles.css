@@ -123,44 +123,43 @@ body {
 
 .mic-divider {
     width: 1px;
-    height: 32px;
+    height: 48px;
     background: rgba(255, 255, 255, 0.1);
     margin: 0 4px;
 }
 
 .mic-button {
     position: relative;
-    width: 32px;
-    height: 32px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid #3fb950;
+    background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
+    border: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #3fb950;
-    font-size: 14px;
+    color: #ffffff;
+    font-size: 16px;
     cursor: pointer;
     transition: all 0.2s ease;
     flex-shrink: 0;
+    box-shadow: 0 4px 16px rgba(35, 134, 54, 0.3);
 }
 
 .mic-button:hover {
-    background: rgba(63, 185, 80, 0.1);
-    color: #3fb950;
-    border-color: rgba(63, 185, 80, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(35, 134, 54, 0.4);
 }
 
 .mic-button.active {
-    background: rgba(63, 185, 80, 0.15);
-    border-color: rgba(63, 185, 80, 0.4);
-    color: #3fb950;
+    background: linear-gradient(135deg, #2ea043 0%, #3fb950 100%);
+    color: #ffffff;
     box-shadow: 0 0 0 4px rgba(63, 185, 80, 0.2), 0 0 16px rgba(63, 185, 80, 0.3);
 }
 
 .mic-button.toggle-mode {
-    background: rgba(63, 185, 80, 0.2);
-    border-color: rgba(63, 185, 80, 0.5);
+    background: linear-gradient(135deg, #3fb950 0%, #50c878 100%);
+    box-shadow: 0 4px 16px rgba(63, 185, 80, 0.4);
 }
 
 /* Tooltip */
