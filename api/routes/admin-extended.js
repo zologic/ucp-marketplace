@@ -479,18 +479,29 @@ router.get('/dashboard/stats', requireAuth, async (req, res) => {
 // GET /admin/system/health - System health check
 router.get('/system/health', requireAuth, async (req, res) => {
     try {
+        const startTime = Date.now();
         const health = {
-            services: {
-                database: { status: 'unknown' },
-                redis: { status: 'unknown' },
-                mcp_server: { status: 'unknown' },
-                worker: { status: 'unknown' }
+            api: {
+                status: 'healthy',
+                response_time: 0,
+                uptime_seconds: process.uptime(),
+                version: process.env.npm_package_version || '1.0.0'
             },
+            database: { status: 'unknown', connection_count: 0, size_bytes: 0, avg_query_time_ms: 0 },
+            redis: { status: 'unknown', memory_used_bytes: 0, memory_peak_bytes: 0, connected_clients: 0, uptime_seconds: 0 },
+            mcp_server: { status: 'unknown', merchants_count: 0, tenants_count: 0, last_sync: null },
+            worker: { status: 'unknown', queue_depth: 0, jobs_processed_24h: 0, jobs_failed_24h: 0, next_crawl: null },
             metrics: {
-                total_merchants: 0,
-                total_tenants: 0,
-                total_products: 0,
-                db_size_bytes: 0
+                total_requests_24h: 0,
+                avg_response_time_ms: 0,
+                error_rate_percent: 0,
+                search_queries_24h: 0
+            },
+            errors: [],
+            system: {
+                environment: process.env.NODE_ENV || 'development',
+                node_version: process.version,
+                platform: process.platform
             }
         };
 
@@ -498,56 +509,76 @@ router.get('/system/health', requireAuth, async (req, res) => {
         try {
             await req.app.locals.db.query('SELECT 1');
             const connResult = await req.app.locals.db.query('SELECT COUNT(*) FROM pg_stat_activity');
-            health.services.database = {
+            const sizeResult = await req.app.locals.db.query('SELECT pg_database_size(current_database()) as size');
+            health.database = {
                 status: 'healthy',
-                connections: parseInt(connResult.rows[0].count)
+                connection_count: parseInt(connResult.rows[0].count),
+                size_bytes: parseInt(sizeResult.rows[0].size),
+                avg_query_time_ms: 0
             };
         } catch (error) {
-            health.services.database = { status: 'unhealthy' };
+            health.database = { status: 'unhealthy', connection_count: 0, size_bytes: 0, avg_query_time_ms: 0 };
         }
 
         // Check Redis
         try {
             await req.app.locals.redis.ping();
-            const info = await req.app.locals.redis.info('memory');
+            const info = await req.app.locals.redis.info();
             const memMatch = info.match(/used_memory:(\d+)/);
-            health.services.redis = {
+            const peakMatch = info.match(/used_memory_peak:(\d+)/);
+            const clientsMatch = info.match(/connected_clients:(\d+)/);
+            const uptimeMatch = info.match(/uptime_in_seconds:(\d+)/);
+            health.redis = {
                 status: 'healthy',
-                memory_used_bytes: memMatch ? parseInt(memMatch[1]) : 0
+                memory_used_bytes: memMatch ? parseInt(memMatch[1]) : 0,
+                memory_peak_bytes: peakMatch ? parseInt(peakMatch[1]) : 0,
+                connected_clients: clientsMatch ? parseInt(clientsMatch[1]) : 0,
+                uptime_seconds: uptimeMatch ? parseInt(uptimeMatch[1]) : 0
             };
         } catch (error) {
-            health.services.redis = { status: 'unhealthy' };
+            health.redis = { status: 'unhealthy', memory_used_bytes: 0, memory_peak_bytes: 0, connected_clients: 0, uptime_seconds: 0 };
         }
 
-        // Check MCP server (optional)
+        // Check MCP server
         const mcpUrl = process.env.MCP_URL || 'http://mcp-server:8080';
         try {
             const axios = require('axios');
             await axios.get(`${mcpUrl}/health`, { timeout: 2000 });
-            health.services.mcp_server = { status: 'healthy' };
+            const metricsResult = await req.app.locals.db.query(`
+                SELECT
+                    (SELECT COUNT(*) FROM merchants) as merchants_count,
+                    (SELECT COUNT(*) FROM tenants) as tenants_count
+            `);
+            const metrics = metricsResult.rows[0];
+            health.mcp_server = {
+                status: 'healthy',
+                merchants_count: parseInt(metrics.merchants_count),
+                tenants_count: parseInt(metrics.tenants_count),
+                last_sync: null
+            };
         } catch (error) {
-            health.services.mcp_server = { status: 'unknown' };
+            health.mcp_server = { status: 'unknown', merchants_count: 0, tenants_count: 0, last_sync: null };
         }
 
-        // Worker status (always unknown unless we implement health endpoint)
-        health.services.worker = { status: 'unknown' };
+        // Worker status
+        health.worker = { status: 'unknown', queue_depth: 0, jobs_processed_24h: 0, jobs_failed_24h: 0, next_crawl: null };
 
-        // Fetch metrics
-        const metricsResult = await req.app.locals.db.query(`
-            SELECT
-                (SELECT COUNT(*) FROM merchants) as total_merchants,
-                (SELECT COUNT(*) FROM tenants) as total_tenants,
-                (SELECT COUNT(*) FROM products) as total_products,
-                (SELECT pg_database_size(current_database())) as db_size_bytes
-        `);
+        // Metrics (24h)
+        try {
+            const metricsResult = await req.app.locals.db.query(`
+                SELECT
+                    (SELECT COUNT(*) FROM search_events WHERE created_at >= NOW() - INTERVAL '24 hours') as search_count
+            `);
+            health.metrics.search_queries_24h = parseInt(metricsResult.rows[0].search_count) || 0;
+        } catch (error) {
+            // Ignore metrics errors
+        }
 
-        const metrics = metricsResult.rows[0];
-        health.metrics = {
-            total_merchants: parseInt(metrics.total_merchants),
-            total_tenants: parseInt(metrics.total_tenants),
-            total_products: parseInt(metrics.total_products),
-            db_size_bytes: parseInt(metrics.db_size_bytes)
-        };
+        // Recent errors (placeholder)
+        health.errors = [];
+
+        // Calculate API response time
+        health.api.response_time = Date.now() - startTime;
 
         res.json(health);
     } catch (error) {
