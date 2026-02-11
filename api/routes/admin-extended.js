@@ -594,7 +594,7 @@ router.get('/analytics/overview', requireAuth, async (req, res) => {
                    COALESCE(SUM(mds.revenue_cents), 0) as revenue_cents,
                    COALESCE(SUM(mds.order_count), 0) as order_count
             FROM merchants m
-            LEFT JOIN merchant_daily_stats mds ON m.id = mds.merchant_id ${dateFilter ? 'AND mds.date >= $1 AND mds.date <= $2' : ''}
+            LEFT JOIN merchant_daily_stats mds ON m.id = mds.merchant_id ${params.length > 0 ? 'AND mds.date >= $1 AND mds.date <= $2' : ''}
             GROUP BY m.id, m.domain
             ORDER BY revenue_cents DESC
             LIMIT 10

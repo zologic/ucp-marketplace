@@ -29,7 +29,7 @@ export default function SystemHealth() {
   const { data: health, isLoading, isError, error, refetch } = useQuery<SystemHealth>({
     queryKey: ['system-health'],
     queryFn: async () => {
-      const response = await apiClient.get('/health');
+      const response = await apiClient.get('/system/health');
       setLastRefresh(new Date());
       return response.data;
     },
@@ -82,7 +82,7 @@ export default function SystemHealth() {
                 {error instanceof Error ? error.message : 'Unable to connect to the health API endpoint. The backend service may be down or unreachable.'}
               </p>
               <div className="text-sm text-muted-foreground">
-                API Endpoint: GET /admin/health
+                API Endpoint: GET /admin/system/health
               </div>
             </div>
           </CardContent>
