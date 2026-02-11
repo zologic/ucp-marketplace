@@ -69,6 +69,9 @@
   --font-2xl: 24px;
   --font-3xl: 30px;
 
+  /* Component Heights */
+  --input-height: 42px;
+
   /* Transitions */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -470,7 +473,8 @@ p {
   align-items: center;
   justify-content: center;
   gap: var(--space-sm);
-  padding: 10px 20px;
+  height: var(--input-height);
+  padding: 0 20px;
   font-size: var(--font-sm);
   font-weight: 500;
   line-height: 1;
@@ -480,6 +484,8 @@ p {
   transition: all var(--transition-fast);
   text-decoration: none;
   font-family: inherit;
+  box-sizing: border-box;
+  white-space: nowrap;
 }
 
 .btn:disabled {
@@ -525,12 +531,14 @@ p {
 }
 
 .btn-sm {
-  padding: 6px 12px;
+  height: 32px;
+  padding: 0 12px;
   font-size: var(--font-xs);
 }
 
 .btn-lg {
-  padding: 14px 28px;
+  height: 48px;
+  padding: 0 28px;
   font-size: var(--font-base);
 }
 
@@ -589,23 +597,29 @@ p {
 
 .form-label {
   display: block;
-  font-size: var(--font-sm);
+  font-size: 12px;
   font-weight: 500;
-  color: var(--text-main);
-  margin-bottom: var(--space-sm);
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .form-input, .form-select, .form-textarea {
   width: 100%;
-  padding: 10px 14px;
+  height: var(--input-height);
+  padding: 0 14px;
   font-size: var(--font-sm);
-  line-height: 1.5;
+  line-height: var(--input-height);
   color: var(--text-main);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   transition: all var(--transition-fast);
   font-family: inherit;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
 }
 
 .form-input:focus, .form-select:focus, .form-textarea:focus {
@@ -617,6 +631,10 @@ p {
 .form-textarea {
   resize: vertical;
   min-height: 100px;
+  height: auto;
+  line-height: 1.5;
+  padding: 10px 14px;
+  display: block;
 }
 
 /* 9. Tables */
@@ -883,7 +901,8 @@ p {
 .filter-group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  justify-content: flex-end;
+  gap: 0;
   min-width: 0;
   flex: 0 0 auto;
 }
@@ -893,15 +912,26 @@ p {
   min-width: 200px;
 }
 
-/* Consistent height for all filter inputs and buttons */
+/* Force all interactive elements to the same height */
 .filter-group input,
 .filter-group select,
 .filter-group .form-input,
 .filter-group .form-select,
-.filters-row .btn {
-  height: 42px;
+.filters-row .btn,
+.filters-row input,
+.filters-row select,
+.filters-row button {
+  height: var(--input-height) !important;
   padding: 0 1rem;
   font-size: var(--font-sm);
+  line-height: var(--input-height);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+}
+
+.filter-group .form-label {
+  margin-bottom: 8px;
 }
 
 /* 19. Details Modal */
