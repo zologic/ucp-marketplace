@@ -84,6 +84,7 @@ body {
     left: 50%;
     transform: translateX(-50%);
     top: auto;
+    z-index: 100;
 }
 
 .search-pill.active {
@@ -550,6 +551,8 @@ body {
     margin-top: auto;
     flex-shrink: 0;
     background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.3));
+    position: relative;
+    z-index: 1;
 }
 
 .footer a {
