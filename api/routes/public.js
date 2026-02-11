@@ -44,7 +44,10 @@ router.post('/search', async (req, res) => {
         // Search products in database (indexed from previous crawls)
         let searchQuery = `
             SELECT
-                p.id, p.name, p.description, p.price_cents, p.currency,
+                p.id, p.name, p.description,
+                p.description_short, p.description_long,
+                p.variations, p.has_variations,
+                p.price_cents, p.currency,
                 p.image_url, p.stock_status, p.merchant_id, p.indexed_at,
                 p.category, p.brand,
                 m.domain as merchant_domain,
@@ -67,6 +70,8 @@ router.post('/search', async (req, res) => {
               AND p.merchant_id = ANY($2::uuid[])
               AND to_tsvector('english', COALESCE(p.name, '') || ' ' ||
                                          COALESCE(p.description, '') || ' ' ||
+                                         COALESCE(p.description_short, '') || ' ' ||
+                                         COALESCE(p.description_long, '') || ' ' ||
                                          COALESCE(p.category, '') || ' ' ||
                                          COALESCE(p.brand, '')) @@ plainto_tsquery('english', $3)
         `;
@@ -129,6 +134,9 @@ router.post('/search', async (req, res) => {
                 merchant_id: p.merchant_id,
                 merchant_name: p.merchant_name,
                 name: p.name,
+                description_short: p.description_short,
+                variations: p.variations,
+                has_variations: p.has_variations,
                 price_cents: p.price_cents,
                 currency: p.currency,
                 image_url: p.image_url,
@@ -146,7 +154,7 @@ router.post('/search', async (req, res) => {
 // ENHANCED: Server-side session IDs + Redis deduplication + Rate limiting (FRAUD PROTECTION)
 router.post('/checkout', async (req, res) => {
     try {
-        const { merchant_id, product_id, quantity = 1 } = req.body;
+        const { merchant_id, product_id, quantity = 1, selected_variations } = req.body;
         const tenantId = req.tenant.id;
 
         // SECURITY: Reject client-provided session_id (prevents fraud)
@@ -197,6 +205,58 @@ router.post('/checkout', async (req, res) => {
 
         if (product.stock_status !== 'in_stock') {
             return res.status(400).json({ error: 'Product out of stock' });
+        }
+
+        // NEW: Variation validation
+        if (product.has_variations) {
+            if (!selected_variations || Object.keys(selected_variations).length === 0) {
+                return res.status(400).json({
+                    error: 'Please select product options',
+                    code: 'VARIATIONS_REQUIRED'
+                });
+            }
+
+            // Validate each variation
+            const variations = product.variations; // JSONB already parsed by pg
+            for (const variation of variations) {
+                const selectedValue = selected_variations[variation.attribute];
+
+                if (!selectedValue) {
+                    return res.status(400).json({
+                        error: `Please select ${variation.attribute}`,
+                        code: 'VARIATION_MISSING',
+                        missing_attribute: variation.attribute
+                    });
+                }
+
+                const option = variation.options.find(opt => opt.value === selectedValue);
+                if (!option) {
+                    return res.status(400).json({
+                        error: `Invalid ${variation.attribute}: ${selectedValue}`,
+                        code: 'VARIATION_INVALID'
+                    });
+                }
+
+                if (!option.available) {
+                    return res.status(400).json({
+                        error: `${variation.attribute} "${selectedValue}" is out of stock`,
+                        code: 'VARIATION_UNAVAILABLE'
+                    });
+                }
+            }
+
+            // Calculate final price with modifiers
+            let finalPriceCents = product.price_cents;
+            for (const variation of variations) {
+                const selectedValue = selected_variations[variation.attribute];
+                const option = variation.options.find(opt => opt.value === selectedValue);
+                if (option && option.price_modifier_cents) {
+                    finalPriceCents += option.price_modifier_cents;
+                }
+            }
+
+            // Store final price for checkout URL
+            product.final_price_cents = finalPriceCents;
         }
 
         // FRAUD PROTECTION: Check merchant click rate limit (100 clicks/hour)
@@ -273,9 +333,23 @@ router.post('/checkout', async (req, res) => {
         // Generate referral ID
         const referralId = crypto.randomUUID();
 
-        // Call merchant UCP checkout endpoint (this would normally create the session on merchant side)
-        // For now, we'll create a placeholder checkout URL
-        const checkoutUrl = `${merchant.domain}/checkout?ref=${referralId}`;
+        // Check merchant's UCP manifest for embedded checkout support
+        let supportsEmbeddedCheckout = false;
+        let checkoutUrl = `${merchant.domain}/checkout?ref=${referralId}`;
+
+        if (merchant.ucp_manifest && merchant.ucp_manifest.capabilities) {
+            const embeddedCheckoutCap = merchant.ucp_manifest.capabilities.find(
+                cap => cap.name === 'dev.ucp.shopping.embedded_checkout' && cap.supported === true
+            );
+
+            if (embeddedCheckoutCap && embeddedCheckoutCap.endpoint) {
+                supportsEmbeddedCheckout = true;
+                // Use the merchant's embedded checkout endpoint
+                checkoutUrl = embeddedCheckoutCap.endpoint.includes('?')
+                    ? `${embeddedCheckoutCap.endpoint}&ref=${referralId}`
+                    : `${embeddedCheckoutCap.endpoint}?ref=${referralId}`;
+            }
+        }
 
         // Create checkout session record
         await req.app.locals.db.query(`
@@ -283,11 +357,12 @@ router.post('/checkout', async (req, res) => {
             VALUES ($1, $2, $3, $4, $5, 'created')
         `, [tenantId, merchant_id, product_id, referralId, checkoutUrl]);
 
-        // Return session_id for transparency (client can log it but not reuse it)
+        // Return checkout info with embedded support flag
         res.json({
             checkout_url: checkoutUrl,
             referral_id: referralId,
-            session_id: sessionId // For debugging/logging only
+            session_id: sessionId, // For debugging/logging only
+            embedded_checkout: supportsEmbeddedCheckout // NEW: Tells frontend to use iframe
         });
     } catch (error) {
         console.error('Checkout error:', error);

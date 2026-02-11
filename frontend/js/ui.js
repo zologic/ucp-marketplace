@@ -85,22 +85,132 @@ function createProductCard(product) {
 
     const imageSrc = product.image_url || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23f5f5f5" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" font-family="Arial" font-size="16" fill="%23999" text-anchor="middle" dy=".3em"%3ENo Image%3C/text%3E%3C/svg%3E';
 
+    // Build description HTML if available
+    const descriptionHtml = product.description_short
+        ? `<p class="product-description">${escapeHtml(product.description_short)}</p>`
+        : '';
+
+    // Build variations HTML if product has variations
+    let variationsHtml = '';
+    if (product.has_variations && product.variations && product.variations.length > 0) {
+        variationsHtml = '<div class="product-variations">';
+        for (const variation of product.variations) {
+            variationsHtml += `<div class="variation-group">
+                <label>${escapeHtml(variation.attribute)}:</label>
+                <div class="variation-options">`;
+
+            for (const option of variation.options) {
+                const disabled = !option.available ? ' disabled' : '';
+                const selected = option.available ? ' selected' : ''; // First available is selected by default
+                variationsHtml += `<button class="variation-option${selected}"
+                    data-attribute="${escapeHtml(variation.attribute)}"
+                    data-value="${escapeHtml(option.value)}"
+                    data-price-modifier="${option.price_modifier_cents || 0}"${disabled}>
+                    ${escapeHtml(option.value)}
+                </button>`;
+            }
+
+            variationsHtml += '</div></div>';
+        }
+        variationsHtml += '</div>';
+    }
+
     card.innerHTML = `
         <img src="${imageSrc}" alt="${escapeHtml(product.name)}" class="product-image" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%23f5f5f5%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 font-family=%22Arial%22 font-size=%2216%22 fill=%22%23999%22 text-anchor=%22middle%22 dy=%22.3em%22%3ENo Image%3C/text%3E%3C/svg%3E'" />
         <h3 class="product-name">${escapeHtml(product.name)}</h3>
-        <p class="product-price">${formatPrice(product.price_cents, product.currency)}</p>
+        ${descriptionHtml}
+        <p class="product-price" data-base-price="${product.price_cents}">${formatPrice(product.price_cents, product.currency)}</p>
         <p class="product-merchant">${escapeHtml(product.merchant_name || 'Merchant')}</p>
+        ${variationsHtml}
         <button class="buy-button" data-merchant="${product.merchant_id}" data-product="${product.id}">
             Buy
         </button>
     `;
 
+    // Store product data in card for variation handling
+    card.dataset.productId = product.id;
+    card.dataset.currency = product.currency;
+
+    // Initialize default selections for variations
+    if (product.has_variations && product.variations) {
+        const defaultSelections = {};
+        for (const variation of product.variations) {
+            const firstAvailable = variation.options.find(opt => opt.available);
+            if (firstAvailable) {
+                defaultSelections[variation.attribute] = firstAvailable.value;
+            }
+        }
+        card.dataset.selectedVariations = JSON.stringify(defaultSelections);
+
+        // Set up variation selection handlers
+        setupVariationHandlers(card, product);
+    }
+
     const button = card.querySelector('.buy-button');
     button.addEventListener('click', () => {
-        handleCheckout(product.merchant_id, product.id);
+        const selectedVariations = card.dataset.selectedVariations
+            ? JSON.parse(card.dataset.selectedVariations)
+            : null;
+        handleCheckout(product.merchant_id, product.id, selectedVariations);
     });
 
     return card;
+}
+
+/**
+ * Setup variation selection handlers
+ * @param {HTMLElement} card - Product card element
+ * @param {Object} product - Product data
+ */
+function setupVariationHandlers(card, product) {
+    card.addEventListener('click', (e) => {
+        if (e.target.classList.contains('variation-option') && !e.target.disabled) {
+            const attribute = e.target.dataset.attribute;
+            const value = e.target.dataset.value;
+
+            // Update visual selection
+            const group = e.target.closest('.variation-group');
+            group.querySelectorAll('.variation-option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            e.target.classList.add('selected');
+
+            // Update stored selections
+            const selections = card.dataset.selectedVariations
+                ? JSON.parse(card.dataset.selectedVariations)
+                : {};
+            selections[attribute] = value;
+            card.dataset.selectedVariations = JSON.stringify(selections);
+
+            // Recalculate and update price
+            updateCardPrice(card, product, selections);
+        }
+    });
+}
+
+/**
+ * Update card price based on selected variations
+ * @param {HTMLElement} card - Product card element
+ * @param {Object} product - Product data
+ * @param {Object} selections - Selected variation values
+ */
+function updateCardPrice(card, product, selections) {
+    let finalPrice = product.price_cents;
+
+    // Add price modifiers from selected variations
+    for (const variation of product.variations) {
+        const selectedValue = selections[variation.attribute];
+        if (selectedValue) {
+            const option = variation.options.find(opt => opt.value === selectedValue);
+            if (option && option.price_modifier_cents) {
+                finalPrice += option.price_modifier_cents;
+            }
+        }
+    }
+
+    // Update price display
+    const priceElement = card.querySelector('.product-price');
+    priceElement.textContent = formatPrice(finalPrice, product.currency);
 }
 
 /**

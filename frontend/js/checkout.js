@@ -1,39 +1,62 @@
 /**
  * Checkout Flow
- * Handles checkout session creation and redirect
+ * Handles checkout session creation with support for redirect and embedded modes
  */
 
 import { showLoading, hideLoading, renderError, showCheckoutRedirect } from './ui.js';
+import { showEmbeddedCheckout } from './embedded-checkout.js';
 
 /**
  * Handle checkout initiation
  * UPDATED: Server-side session IDs (removed client-side generation)
  * @param {string} merchantId - Merchant UUID
  * @param {string} productId - Product UUID
+ * @param {Object} selectedVariations - Selected product variations (optional)
  */
-export async function handleCheckout(merchantId, productId) {
+export async function handleCheckout(merchantId, productId, selectedVariations = null) {
     showLoading();
 
     try {
         const apiBase = window.location.origin + '/api';
+
+        const requestBody = {
+            merchant_id: merchantId,
+            product_id: productId,
+            quantity: 1
+            // DO NOT send session_id - server generates it
+        };
+
+        // Add variations if provided
+        if (selectedVariations) {
+            requestBody.selected_variations = selectedVariations;
+        }
 
         const response = await fetch(`${apiBase}/checkout`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                merchant_id: merchantId,
-                product_id: productId,
-                quantity: 1
-                // DO NOT send session_id - server generates it
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
             const data = await response.json();
 
-            // Handle specific error codes from server
+            // Handle variation-specific errors
+            if (data.code === 'VARIATIONS_REQUIRED') {
+                throw new Error('Please select all product options');
+            }
+            if (data.code === 'VARIATION_MISSING') {
+                throw new Error(data.error || 'Please select all options');
+            }
+            if (data.code === 'VARIATION_INVALID') {
+                throw new Error('Invalid selection. Please choose different options.');
+            }
+            if (data.code === 'VARIATION_UNAVAILABLE') {
+                throw new Error(data.error || 'Selected option is out of stock');
+            }
+
+            // Handle other error codes from server
             if (data.code === 'CLICK_RATE_LIMIT') {
                 throw new Error(`Too many clicks. Please wait ${data.retryAfter} seconds.`);
             }
@@ -66,9 +89,15 @@ export async function handleCheckout(merchantId, productId) {
             sessionStorage.setItem('last_session_id', data.session_id);
         }
 
-        // Show redirect message and redirect
-        hideLoading();
-        showCheckoutRedirect(data.checkout_url);
+        // Check if merchant supports embedded checkout
+        if (data.embedded_checkout) {
+            // Show embedded checkout in iframe
+            showEmbeddedCheckout(data.checkout_url, data.referral_id);
+        } else {
+            // Traditional redirect flow
+            hideLoading();
+            showCheckoutRedirect(data.checkout_url);
+        }
 
     } catch (error) {
         hideLoading();
