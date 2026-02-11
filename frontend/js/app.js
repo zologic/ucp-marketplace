@@ -41,10 +41,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Show/hide clear button based on input content
+    // Show/hide clear button based on input content OR results visibility
     searchInput.addEventListener('input', () => {
         clearError();
-        if (searchInput.value.trim().length > 0) {
+        const resultsSection = document.getElementById('results-section');
+        const hasResults = resultsSection && !resultsSection.classList.contains('hidden');
+
+        // Show clear button if there's text OR if results are visible
+        if (searchInput.value.trim().length > 0 || hasResults) {
             clearButton.classList.remove('hidden');
         } else {
             clearButton.classList.add('hidden');
@@ -100,11 +104,17 @@ document.addEventListener('DOMContentLoaded', () => {
             trustIndicators.classList.remove('hidden-for-results');
         }
 
+        // Hide clear button when returning to centered state
+        clearButton.classList.add('hidden');
+
         // Fade out results simultaneously (using setTimeout for slight delay)
         setTimeout(() => {
             resultsSection.classList.add('hidden');
         }, 100);
     }
+
+    // Listen for custom resetSearchState event (triggered by auto-reset timer)
+    window.addEventListener('resetSearchState', resetSearchState);
 
 
     // Global error handler
