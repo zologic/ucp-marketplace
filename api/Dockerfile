@@ -19,7 +19,7 @@ COPY api/ .
 
 # Copy database migrations to /database and migrate.js to /app
 COPY --chown=nodejs:nodejs database/ /database
-COPY --chown=nodejs:nodejs database/migrate.js /app/migrate.js
+COPY --chown=nodejs:nodejs database/migrations_archive/migrate.js /app/migrate.js
 
 # Change ownership to non-root user
 RUN chown -R nodejs:nodejs /app
