@@ -34,6 +34,9 @@ export function renderResults(products) {
             clearButton.classList.remove('hidden');
         }
 
+        // Morph Search button to Clear button
+        window.dispatchEvent(new CustomEvent('morphButtonToClear'));
+
         // Start 5-second auto-reset timer
         autoResetTimer = setTimeout(() => {
             // Clear input
@@ -59,6 +62,9 @@ export function renderResults(products) {
     if (clearButton) {
         clearButton.classList.remove('hidden');
     }
+
+    // Morph Search button to Clear button
+    window.dispatchEvent(new CustomEvent('morphButtonToClear'));
 
     products.forEach(product => {
         const card = createProductCard(product);

@@ -280,6 +280,11 @@ body {
     transform: none;
 }
 
+/* Clear mode styling - keeps green gradient, just morphs text */
+.search-button.clear-mode {
+    background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
+}
+
 .clear-button {
     width: 32px;
     height: 32px;

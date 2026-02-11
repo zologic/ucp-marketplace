@@ -33,11 +33,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Handle search on button click
+    // Track button state
+    let buttonMode = 'search'; // 'search' or 'clear'
+
+    // Handle search/clear button click (morphing button)
     searchButton.addEventListener('click', () => {
-        const query = searchInput.value.trim();
-        if (query) {
-            handleSearch(query, API_BASE);
+        if (buttonMode === 'clear') {
+            // Clear mode: reset everything
+            searchInput.value = '';
+            clearButton.classList.add('hidden');
+            resetSearchState();
+        } else {
+            // Search mode: perform search
+            const query = searchInput.value.trim();
+            if (query) {
+                handleSearch(query, API_BASE);
+            }
         }
     });
 
@@ -90,6 +101,20 @@ document.addEventListener('DOMContentLoaded', () => {
         );
     }
 
+    // Morph button to Search mode
+    function morphButtonToSearch() {
+        buttonMode = 'search';
+        searchButton.textContent = 'Search';
+        searchButton.classList.remove('clear-mode');
+    }
+
+    // Morph button to Clear mode
+    function morphButtonToClear() {
+        buttonMode = 'clear';
+        searchButton.textContent = 'Clear';
+        searchButton.classList.add('clear-mode');
+    }
+
     // Reset search state - return pill to center, hide results
     function resetSearchState() {
         const resultsSection = document.getElementById('results-section');
@@ -107,6 +132,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Hide clear button when returning to centered state
         clearButton.classList.add('hidden');
 
+        // Morph button back to Search
+        morphButtonToSearch();
+
         // Fade out results simultaneously (using setTimeout for slight delay)
         setTimeout(() => {
             resultsSection.classList.add('hidden');
@@ -115,6 +143,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Listen for custom resetSearchState event (triggered by auto-reset timer)
     window.addEventListener('resetSearchState', resetSearchState);
+
+    // Listen for morphButton event (triggered when results are displayed)
+    window.addEventListener('morphButtonToClear', morphButtonToClear);
 
 
     // Global error handler
