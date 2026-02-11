@@ -543,7 +543,7 @@ router.get('/system/health', requireAuth, async (req, res) => {
         const mcpUrl = process.env.MCP_URL || 'http://mcp-server:8080';
         try {
             const axios = require('axios');
-            await axios.get(`${mcpUrl}/health`, { timeout: 2000 });
+            await axios.get(`${mcpUrl}/internal/health`, { timeout: 2000 });
             const metricsResult = await req.app.locals.db.query(`
                 SELECT
                     (SELECT COUNT(*) FROM merchants) as merchants_count,
@@ -557,7 +557,8 @@ router.get('/system/health', requireAuth, async (req, res) => {
                 last_sync: null
             };
         } catch (error) {
-            health.mcp_server = { status: 'unknown', merchants_count: 0, tenants_count: 0, last_sync: null };
+            console.error('MCP health check failed:', error.message);
+            health.mcp_server = { status: 'unhealthy', merchants_count: 0, tenants_count: 0, last_sync: null };
         }
 
         // Worker status
