@@ -341,6 +341,7 @@ router.post('/checkout', async (req, res) => {
             if (checkoutService && checkoutService.endpoint) {
                 try {
                     // Call merchant's UCP API to create checkout session
+                    console.log(`[Checkout] Calling merchant API: ${checkoutService.endpoint}`);
                     const checkoutResponse = await axios.post(checkoutService.endpoint, {
                         line_items: [{
                             product_id: parseInt(product.merchant_product_id),
@@ -353,28 +354,38 @@ router.post('/checkout', async (req, res) => {
                         timeout: 10000
                     });
 
-                    if (checkoutResponse.data) {
-                        // Check if merchant returns embedded_checkout_url (with token already included)
-                        if (checkoutResponse.data.status === 'requires_escalation' && checkoutResponse.data.embedded_checkout_url) {
-                            // Use the embedded checkout URL directly (already has token)
-                            checkoutUrl = checkoutResponse.data.embedded_checkout_url;
-                            supportsEmbeddedCheckout = true;
-                        } else if (checkoutResponse.data.checkout_url) {
-                            // Use standard checkout URL
-                            checkoutUrl = checkoutResponse.data.checkout_url;
+                    console.log(`[Checkout] Merchant API response:`, JSON.stringify(checkoutResponse.data));
 
-                            // Check if merchant supports embedded checkout capability
+                    if (checkoutResponse.data) {
+                        const session = checkoutResponse.data;
+
+                        // Check if merchant returns embedded_checkout_url
+                        if (session.embedded_checkout_url) {
+                            // Use the embedded checkout URL directly (already has token)
+                            checkoutUrl = session.embedded_checkout_url;
+                            supportsEmbeddedCheckout = true;
+                            console.log(`[Checkout] Using embedded_checkout_url: ${checkoutUrl}`);
+                        } else if (session.id) {
+                            // Build embedded URL using session ID if capability is supported
                             const embeddedCheckoutCap = merchant.ucp_manifest.capabilities?.find(
                                 cap => cap.name === 'dev.ucp.shopping.embedded_checkout' && cap.supported === true
                             );
 
-                            if (embeddedCheckoutCap) {
+                            if (embeddedCheckoutCap && embeddedCheckoutCap.endpoint) {
+                                const endpointBase = embeddedCheckoutCap.endpoint.replace(/\/$/, '');
+                                checkoutUrl = `${endpointBase}/${session.id}?token=${session.id}`;
                                 supportsEmbeddedCheckout = true;
+                                console.log(`[Checkout] Built embedded URL with session ID: ${checkoutUrl}`);
+                            } else {
+                                // Fallback to standard checkout
+                                checkoutUrl = `https://${merchant.domain}/checkout?session=${session.id}`;
                             }
+                        } else if (session.checkout_url) {
+                            checkoutUrl = session.checkout_url;
                         }
                     }
                 } catch (apiError) {
-                    console.error('Failed to create merchant checkout session:', apiError.message);
+                    console.error('[Checkout] Failed to create merchant checkout session:', apiError.response?.data || apiError.message);
                     // Fall back to direct URL
                     checkoutUrl = `https://${merchant.domain}/checkout?ref=${referralId}`;
                 }
