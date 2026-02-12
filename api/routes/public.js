@@ -347,13 +347,15 @@ router.post('/checkout', async (req, res) => {
             if (checkoutService && checkoutService.endpoint) {
                 try {
                     // Call merchant's UCP API to create checkout session
-                    console.log(`[Checkout] Calling merchant API: ${checkoutService.endpoint}/checkout-sessions`);
-                    const checkoutResponse = await axios.post(`${checkoutService.endpoint}/checkout-sessions`, {
+                    console.log(`[Checkout] Calling merchant API: ${checkoutService.endpoint}/checkout`);
+                    const requestBody = {
                         line_items: [{
-                            product_id: parseInt(product.merchant_product_id),
-                            quantity: quantity
+                            item: { id: String(product.merchant_product_id) },
+                            quantity: Number(quantity)
                         }]
-                    }, {
+                    };
+                    console.log(`[Checkout] Request body:`, JSON.stringify(requestBody));
+                    const checkoutResponse = await axios.post(`${checkoutService.endpoint}/checkout`, requestBody, {
                         headers: {
                             'Content-Type': 'application/json',
                             'Idempotency-Key': referralId,
