@@ -65,13 +65,18 @@ async function verifyMerchants(db) {
 
                 if (embeddedCheckoutCap && embeddedCheckoutCap.endpoint) {
                     try {
-                        // Test the embedded checkout endpoint
-                        const testResponse = await axios.head(embeddedCheckoutCap.endpoint, {
+                        // Test the embedded checkout endpoint with a test session ID
+                        // Parameterized endpoints should return 400/401/403 (route exists, invalid request)
+                        // 404 still means the route doesn't exist
+                        const testSessionId = '00000000-0000-0000-0000-000000000000';
+                        const testEndpoint = `${embeddedCheckoutCap.endpoint}/${testSessionId}`;
+
+                        const testResponse = await axios.head(testEndpoint, {
                             timeout: 5000,
                             validateStatus: (status) => status < 500
                         });
 
-                        // If endpoint returns 404 or 405, mark as not supported
+                        // If endpoint returns 404 or 405, mark as not supported (route doesn't exist)
                         if (testResponse.status === 404 || testResponse.status === 405) {
                             console.log(`[verifyMerchants] ${merchant.domain}: Embedded checkout endpoint exists in manifest but returns ${testResponse.status}`);
 
@@ -82,6 +87,9 @@ async function verifyMerchants(db) {
                                 }
                                 return cap;
                             });
+                        } else if (testResponse.status === 400 || testResponse.status === 401 || testResponse.status === 403) {
+                            // 400/401/403 means route exists but request is invalid (expected for parameterized endpoints)
+                            console.log(`[verifyMerchants] ${merchant.domain}: Embedded checkout endpoint validated (status ${testResponse.status} indicates route exists)`);
                         }
                     } catch (error) {
                         // If endpoint is unreachable, mark as not supported
