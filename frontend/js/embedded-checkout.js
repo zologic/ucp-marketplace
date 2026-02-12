@@ -23,7 +23,7 @@ const pendingRequests = new Map();
  */
 export function showEmbeddedCheckout(checkoutUrl, referralId) {
     // Build ECP-compliant URL with required parameters
-    const ecpUrl = buildEcpUrl(checkoutUrl);
+    const ecpUrl = buildEcpUrl(checkoutUrl, referralId);
 
     // Create overlay container
     const overlay = document.createElement('div');
@@ -122,11 +122,12 @@ export function showEmbeddedCheckout(checkoutUrl, referralId) {
  * @param {string} baseUrl - Base checkout URL
  * @returns {string} ECP URL with parameters
  */
-function buildEcpUrl(baseUrl) {
+function buildEcpUrl(baseUrl, referralId) {
     const url = new URL(baseUrl);
     url.searchParams.set('ec_version', ECP_VERSION);
     url.searchParams.set('ec_delegate', ECP_DELEGATIONS.join(','));
-    // ec_auth parameter would be added here if authentication is needed
+    // Add ec_auth token (use referral ID as token for now)
+    url.searchParams.set('ec_auth', referralId);
     return url.toString();
 }
 
