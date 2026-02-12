@@ -29,7 +29,8 @@
     "nodemailer": "^6.9.7",
     "@noble/ed25519": "^2.0.0",
     "graphql": "^15.8.0",
-    "express-graphql": "^0.12.0"
+    "express-graphql": "^0.12.0",
+    "node-cron": "^3.0.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
