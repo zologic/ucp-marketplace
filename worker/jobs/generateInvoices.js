@@ -7,7 +7,7 @@
 const stripe = process.env.STRIPE_SECRET_KEY
     ? require('stripe')(process.env.STRIPE_SECRET_KEY)
     : null;
-const { sendEmail } = require('../../api/services/emailService');
+const { sendEmail } = require('/app/services/emailService');
 
 async function generateInvoices(db) {
     const startTime = Date.now();
