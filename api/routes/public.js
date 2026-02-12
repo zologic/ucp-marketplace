@@ -243,18 +243,33 @@ router.post('/checkout', async (req, res) => {
                 }
             }
 
-            // Calculate final price with modifiers
+            // Calculate final price with modifiers and find variation ID
             let finalPriceCents = product.price_cents;
+            let selectedVariationId = null;
+
+            // Find the variation_id that matches ALL selected attributes
+            // For single-attribute variations, this will be straightforward
+            // For multi-attribute variations, we need to match all attributes
             for (const variation of variations) {
                 const selectedValue = selected_variations[variation.attribute];
                 const option = variation.options.find(opt => opt.value === selectedValue);
-                if (option && option.price_modifier_cents) {
-                    finalPriceCents += option.price_modifier_cents;
+                if (option) {
+                    if (option.price_modifier_cents) {
+                        finalPriceCents += option.price_modifier_cents;
+                    }
+                    // For now, use the first variation_id found
+                    // TODO: For multi-attribute products, need to find the exact variation that matches ALL attributes
+                    if (!selectedVariationId && option.variation_id) {
+                        selectedVariationId = option.variation_id;
+                    }
                 }
             }
 
-            // Store final price for checkout URL
+            // Store final price and variation ID for checkout
             product.final_price_cents = finalPriceCents;
+            product.selected_variation_id = selectedVariationId;
+
+            console.log(`[Checkout] Variable product: using variation_id ${selectedVariationId} for ${JSON.stringify(selected_variations)}`);
         }
 
         // FRAUD PROTECTION: Check merchant click rate limit (100 clicks/hour)
@@ -351,9 +366,13 @@ router.post('/checkout', async (req, res) => {
                 try {
                     // Call merchant's UCP API to create checkout session
                     console.log(`[Checkout] Calling merchant API: ${checkoutService.endpoint}/checkout`);
+
+                    // For variable products, use the selected variation_id; otherwise use the product's external_id
+                    const itemId = product.selected_variation_id || String(product.external_id);
+
                     const requestBody = {
                         line_items: [{
-                            item: { id: String(product.external_id) },
+                            item: { id: itemId },
                             quantity: Number(quantity)
                         }]
                     };
