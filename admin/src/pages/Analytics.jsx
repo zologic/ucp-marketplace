@@ -390,6 +390,38 @@ function Analytics() {
         </div>
       </div>
 
+      {/* Referral Sources Breakdown */}
+      <div className="card mb-lg">
+        <div className="card-header">
+          <h3 className="card-title">Referral Sources</h3>
+        </div>
+        <div className="card-body">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>Conversions</th>
+                <th>Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {analytics?.referral_sources?.map((source, index) => (
+                <tr key={index}>
+                  <td>{source.referral_source || 'Unknown'}</td>
+                  <td>{source.conversion_count}</td>
+                  <td>{formatCurrency(source.revenue_cents)}</td>
+                </tr>
+              ))}
+              {(!analytics?.referral_sources || analytics.referral_sources.length === 0) && (
+                <tr>
+                  <td colSpan="3" className="text-center text-muted">No referral data available</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Top Performers */}
       <div className="grid grid-cols-2 gap-16">
         <div className="card">

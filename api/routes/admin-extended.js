@@ -694,6 +694,22 @@ router.get('/analytics', requireAuth, async (req, res) => {
         const referralConversions = parseInt(conversionsResult.rows[0].referral_conversions);
         const conversionRate = totalSearches > 0 ? (referralConversions / totalSearches) * 100 : 0;
 
+        // 2b. Get referral sources breakdown
+        const referralSourcesResult = await req.app.locals.db.query(`
+            SELECT
+                referral_source,
+                COUNT(*) as conversion_count,
+                SUM(revenue_cents) as revenue_cents
+            FROM orders
+            WHERE referral_source IS NOT NULL
+              AND created_at BETWEEN $1 AND $2
+            GROUP BY referral_source
+            ORDER BY conversion_count DESC
+            LIMIT 10
+        `, [startDate, endDate]);
+
+        const referralSources = referralSourcesResult.rows;
+
         // 3. Trends data (dates and searches arrays)
         const trendsResult = await req.app.locals.db.query(`
             SELECT date,
@@ -793,7 +809,8 @@ router.get('/analytics', requireAuth, async (req, res) => {
                 name: row.name,
                 search_count: parseInt(row.search_count),
                 click_count: parseInt(row.click_count)
-            }))
+            })),
+            referral_sources: referralSources
         });
     } catch (error) {
         console.error('Analytics error:', error);

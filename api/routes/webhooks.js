@@ -79,22 +79,27 @@ router.post('/order-completed', async (req, res) => {
         );
 
         let checkoutSessionId = null;
+        let referralSource = 'UNKNOWN';
         if (sessionResult.rows.length > 0) {
             checkoutSessionId = sessionResult.rows[0].id;
+            referralSource = sessionResult.rows[0].referral_source || 'UNKNOWN';
 
             // Update checkout session status
             await req.app.locals.db.query(
                 'UPDATE checkout_sessions SET status = $1, completed_at = NOW() WHERE id = $2',
                 ['completed', checkoutSessionId]
             );
+        } else {
+            // No checkout session found - use merchant domain as fallback source
+            referralSource = `UCP-${merchant.domain}`;
         }
 
         // Create order record
         const orderResult = await req.app.locals.db.query(`
-            INSERT INTO orders (tenant_id, merchant_id, checkout_session_id, referral_id, merchant_order_id, revenue_cents, currency, webhook_signature, verified)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+            INSERT INTO orders (tenant_id, merchant_id, checkout_session_id, referral_id, merchant_order_id, revenue_cents, currency, webhook_signature, verified, referral_source)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9)
             RETURNING id
-        `, [tenantId, merchant.id, checkoutSessionId, referral_id, order_id, total_cents, currency, signature]);
+        `, [tenantId, merchant.id, checkoutSessionId, referral_id, order_id, total_cents, currency, signature, referralSource]);
 
         const orderId = orderResult.rows[0].id;
 

@@ -195,7 +195,7 @@ function setupVariationHandlers(card, product) {
  * @param {Object} selections - Selected variation values
  */
 function updateCardPrice(card, product, selections) {
-    let finalPrice = product.price_cents;
+    let finalPrice = parseInt(card.querySelector('.product-price').dataset.basePrice, 10);
 
     // Add price modifiers from selected variations
     for (const variation of product.variations) {
