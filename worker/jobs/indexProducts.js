@@ -80,6 +80,7 @@ async function indexProducts(db) {
                 logId = logResult.rows[0].id;
 
                 // Fetch products from merchant using dynamic endpoint
+                console.log(`[indexProducts] Fetching from: ${productsEndpoint}`);
                 const productsResponse = await axios.get(productsEndpoint, {
                     timeout: 30000
                     // Note: Some UCP implementations don't accept pagination params
