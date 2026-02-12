@@ -611,6 +611,256 @@ router.get('/system/health', requireAuth, async (req, res) => {
     }
 });
 
+// GET /admin/analytics - Comprehensive platform analytics (matches frontend expectations)
+router.get('/analytics', requireAuth, async (req, res) => {
+    try {
+        const { period = 'month', start_date, end_date } = req.query;
+
+        // Validate and build date filter
+        let dateFilter = '';
+        const params = [];
+        let startDate, endDate;
+
+        if (start_date && end_date) {
+            // Validate date format
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(start_date) || !/^\d{4}-\d{2}-\d{2}$/.test(end_date)) {
+                return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+            }
+
+            // Validate date order
+            if (new Date(start_date) > new Date(end_date)) {
+                return res.status(400).json({ error: 'start_date must be before end_date' });
+            }
+
+            dateFilter = 'WHERE date BETWEEN $1 AND $2';
+            params.push(start_date, end_date);
+            startDate = start_date;
+            endDate = end_date;
+        } else if (period === 'day') {
+            dateFilter = "WHERE date >= CURRENT_DATE - INTERVAL '1 day'";
+            startDate = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+            endDate = new Date().toISOString().split('T')[0];
+        } else if (period === 'week') {
+            dateFilter = "WHERE date >= CURRENT_DATE - INTERVAL '7 days'";
+            startDate = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+            endDate = new Date().toISOString().split('T')[0];
+        } else if (period === 'month') {
+            dateFilter = "WHERE date >= CURRENT_DATE - INTERVAL '30 days'";
+            startDate = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+            endDate = new Date().toISOString().split('T')[0];
+        }
+
+        // 1. Aggregate metrics
+        const metricsResult = await req.app.locals.db.query(`
+            SELECT
+                COALESCE(SUM(search_count), 0) as total_searches,
+                COALESCE(SUM(click_count), 0) as total_clicks,
+                COALESCE(SUM(checkout_count), 0) as total_checkouts,
+                COALESCE(SUM(revenue_cents), 0) as total_revenue_cents
+            FROM merchant_daily_stats
+            ${dateFilter}
+        `, params);
+
+        const metricsData = metricsResult.rows[0];
+
+        // Calculate CTR (avoid division by zero)
+        const totalSearches = parseInt(metricsData.total_searches);
+        const totalClicks = parseInt(metricsData.total_clicks);
+        const ctr = totalSearches > 0 ? (totalClicks / totalSearches) * 100 : 0;
+
+        // 2. Get referral conversions
+        const conversionsResult = await req.app.locals.db.query(`
+            SELECT COUNT(*) as referral_conversions
+            FROM orders
+            WHERE referral_id IS NOT NULL
+              AND created_at BETWEEN $1 AND $2
+        `, [startDate, endDate]);
+
+        const referralConversions = parseInt(conversionsResult.rows[0].referral_conversions);
+        const conversionRate = totalSearches > 0 ? (referralConversions / totalSearches) * 100 : 0;
+
+        // 3. Trends data (dates and searches arrays)
+        const trendsResult = await req.app.locals.db.query(`
+            SELECT date,
+                   COALESCE(SUM(search_count), 0) as searches
+            FROM merchant_daily_stats
+            ${dateFilter}
+            GROUP BY date
+            ORDER BY date ASC
+        `, params);
+
+        const trends = {
+            dates: trendsResult.rows.map(row => row.date),
+            searches: trendsResult.rows.map(row => parseInt(row.searches))
+        };
+
+        // 4. Revenue by tenant
+        const revenueByTenantResult = await req.app.locals.db.query(`
+            SELECT
+                t.id as tenant_id,
+                t.name as tenant_name,
+                COALESCE(SUM(mds.revenue_cents), 0) as revenue_cents
+            FROM tenants t
+            LEFT JOIN merchants m ON t.id = m.tenant_id
+            LEFT JOIN merchant_daily_stats mds ON m.id = mds.merchant_id
+            ${dateFilter.replace('WHERE', 'AND')}
+            GROUP BY t.id, t.name
+            HAVING SUM(mds.revenue_cents) > 0
+            ORDER BY revenue_cents DESC
+            LIMIT 10
+        `, params);
+
+        // 5. Commission by tenant (5% commission rate)
+        const commissionByTenant = revenueByTenantResult.rows.map(row => ({
+            tenant_id: row.tenant_id,
+            tenant_name: row.tenant_name,
+            commission_cents: Math.round(parseInt(row.revenue_cents) * 0.05)
+        }));
+
+        // 6. Top merchants (reuse logic from overview endpoint)
+        const topMerchantsResult = await req.app.locals.db.query(`
+            SELECT m.id, m.domain,
+                   COALESCE(SUM(mds.revenue_cents), 0) as revenue_cents,
+                   COALESCE(SUM(mds.order_count), 0) as order_count
+            FROM merchants m
+            LEFT JOIN merchant_daily_stats mds ON m.id = mds.merchant_id
+            ${dateFilter.replace('WHERE', 'AND')}
+            GROUP BY m.id, m.domain
+            HAVING SUM(mds.revenue_cents) > 0
+            ORDER BY revenue_cents DESC
+            LIMIT 10
+        `, params);
+
+        // 7. Top products by search count
+        const topProductsResult = await req.app.locals.db.query(`
+            SELECT
+                p.id as product_id,
+                p.name,
+                COUNT(DISTINCT se.id) as search_count,
+                COUNT(DISTINCT ce.id) as click_count
+            FROM products p
+            LEFT JOIN search_events se ON p.id = se.product_id
+              AND se.created_at BETWEEN $1 AND $2
+            LEFT JOIN click_events ce ON p.id = ce.product_id
+              AND ce.created_at BETWEEN $1 AND $2
+            WHERE se.id IS NOT NULL OR ce.id IS NOT NULL
+            GROUP BY p.id, p.name
+            ORDER BY search_count DESC
+            LIMIT 10
+        `, [startDate, endDate]);
+
+        // Format response to match frontend expectations
+        res.json({
+            metrics: {
+                total_searches: totalSearches,
+                total_clicks: totalClicks,
+                ctr: parseFloat(ctr.toFixed(2)),
+                total_checkouts: parseInt(metricsData.total_checkouts),
+                referral_conversions: referralConversions,
+                conversion_rate: parseFloat(conversionRate.toFixed(2)),
+                total_revenue_cents: parseInt(metricsData.total_revenue_cents)
+            },
+            trends: trends,
+            revenue_by_tenant: revenueByTenantResult.rows.map(row => ({
+                tenant_id: row.tenant_id,
+                tenant_name: row.tenant_name,
+                revenue_cents: parseInt(row.revenue_cents)
+            })),
+            commission_by_tenant: commissionByTenant,
+            top_merchants: topMerchantsResult.rows.map(row => ({
+                id: row.id,
+                domain: row.domain,
+                revenue_cents: parseInt(row.revenue_cents),
+                order_count: parseInt(row.order_count)
+            })),
+            top_products: topProductsResult.rows.map(row => ({
+                product_id: row.product_id,
+                name: row.name,
+                search_count: parseInt(row.search_count),
+                click_count: parseInt(row.click_count)
+            }))
+        });
+    } catch (error) {
+        console.error('Analytics error:', error);
+        res.status(500).json({ error: 'Failed to load analytics' });
+    }
+});
+
+// GET /admin/analytics/export - Export analytics as CSV
+router.get('/analytics/export', requireAuth, async (req, res) => {
+    try {
+        const { period = 'month', start_date, end_date } = req.query;
+
+        // Validate and build date filter
+        let dateFilter = '';
+        const params = [];
+        let startDate, endDate;
+
+        if (start_date && end_date) {
+            // Validate date format
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(start_date) || !/^\d{4}-\d{2}-\d{2}$/.test(end_date)) {
+                return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+            }
+
+            // Validate date order
+            if (new Date(start_date) > new Date(end_date)) {
+                return res.status(400).json({ error: 'start_date must be before end_date' });
+            }
+
+            dateFilter = 'WHERE date BETWEEN $1 AND $2';
+            params.push(start_date, end_date);
+            startDate = start_date;
+            endDate = end_date;
+        } else if (period === 'day') {
+            dateFilter = "WHERE date >= CURRENT_DATE - INTERVAL '1 day'";
+            startDate = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+            endDate = new Date().toISOString().split('T')[0];
+        } else if (period === 'week') {
+            dateFilter = "WHERE date >= CURRENT_DATE - INTERVAL '7 days'";
+            startDate = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+            endDate = new Date().toISOString().split('T')[0];
+        } else if (period === 'month') {
+            dateFilter = "WHERE date >= CURRENT_DATE - INTERVAL '30 days'";
+            startDate = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+            endDate = new Date().toISOString().split('T')[0];
+        }
+
+        // Query daily aggregated data
+        const dailyResult = await req.app.locals.db.query(`
+            SELECT
+                date,
+                COALESCE(SUM(search_count), 0) as searches,
+                COALESCE(SUM(click_count), 0) as clicks,
+                CASE
+                    WHEN SUM(search_count) > 0
+                    THEN (SUM(click_count)::float / SUM(search_count) * 100)
+                    ELSE 0
+                END as ctr,
+                COALESCE(SUM(checkout_count), 0) as checkouts,
+                COALESCE(SUM(revenue_cents), 0) / 100.0 as revenue_eur
+            FROM merchant_daily_stats
+            ${dateFilter}
+            GROUP BY date
+            ORDER BY date
+        `, params);
+
+        // Build CSV content
+        let csv = 'Date,Searches,Clicks,CTR %,Checkouts,Revenue (EUR)\n';
+
+        for (const row of dailyResult.rows) {
+            csv += `${row.date},${row.searches},${row.clicks},${parseFloat(row.ctr).toFixed(2)},${row.checkouts},${parseFloat(row.revenue_eur).toFixed(2)}\n`;
+        }
+
+        // Set response headers for CSV download
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="analytics-export-${startDate}-${endDate}.csv"`);
+        res.send(csv);
+    } catch (error) {
+        console.error('Analytics export error:', error);
+        res.status(500).json({ error: 'Failed to export analytics' });
+    }
+});
+
 // GET /admin/analytics/overview - Platform-wide analytics
 router.get('/analytics/overview', requireAuth, async (req, res) => {
     try {
