@@ -111,6 +111,10 @@ export const verifyMerchant = (id) => {
   return apiClient.post(`/merchants/${id}/verify`);
 };
 
+export const triggerMerchantIndex = (id) => {
+  return apiClient.post(`/merchants/${id}/index`);
+};
+
 // Analytics
 export const getAnalytics = (params) => {
   return apiClient.get('/analytics', { params });

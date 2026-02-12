@@ -11,7 +11,8 @@ import {
   suspendMerchant,
   activateMerchant,
   recrawlMerchant,
-  verifyMerchant
+  verifyMerchant,
+  triggerMerchantIndex
 } from '../api/client.js';
 
 function Merchants() {
@@ -195,6 +196,18 @@ function Merchants() {
     }
   };
 
+  const handleIndexProducts = async (merchant) => {
+    try {
+      const response = await triggerMerchantIndex(merchant.id);
+      alert(`Product indexing started for ${merchant.domain}!\n\nThis will run in the background and may take a few minutes.`);
+      fetchMerchants(); // Refresh to show status
+    } catch (err) {
+      const errorMsg = err.response?.data?.error || 'Failed to trigger indexing';
+      setError(errorMsg);
+      alert(`Indexing failed: ${errorMsg}`);
+    }
+  };
+
   const handleReverifyMerchant = async (merchant) => {
     try {
       const response = await verifyMerchant(merchant.id);
@@ -342,6 +355,9 @@ function Merchants() {
               </Button>
               <Button variant="outline" size="sm" onClick={() => handleRecrawl(row)}>
                 Re-crawl
+              </Button>
+              <Button variant="primary" size="sm" onClick={() => handleIndexProducts(row)}>
+                Index Products
               </Button>
             </>
           )}
