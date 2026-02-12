@@ -124,6 +124,24 @@ async function indexProducts(db) {
                             }
                         }
 
+                        // CRITICAL: Determine if price is in cents or currency units
+                        // WooCommerce sends "price" in currency units (10.00 = ten euros)
+                        // UCP spec requires "price_cents" in cents (1000 = ten euros)
+                        let priceCents;
+
+                        if (product.price_cents !== undefined) {
+                            // If price_cents exists but looks like currency units, convert
+                            // Heuristic: if < 100, it's likely currency units (e.g., 10 EUR)
+                            priceCents = product.price_cents < 100
+                                ? Math.round(product.price_cents * 100)
+                                : product.price_cents;
+                        } else if (product.price !== undefined) {
+                            // WooCommerce sends "price" in currency units - convert to cents
+                            priceCents = Math.round(parseFloat(product.price) * 100);
+                        } else {
+                            priceCents = 0;
+                        }
+
                         await db.query(`
                             INSERT INTO products (
                                 merchant_id, tenant_id, external_id, name, description,
@@ -157,7 +175,7 @@ async function indexProducts(db) {
                             descriptionLong,
                             JSON.stringify(variations),
                             hasVariations,
-                            product.price_cents,
+                            priceCents,
                             product.currency || 'EUR',
                             product.category || null,
                             product.brand || null,
