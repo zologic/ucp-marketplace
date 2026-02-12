@@ -340,7 +340,7 @@ router.post('/checkout', async (req, res) => {
             console.log(`[Checkout] Found dev.ucp.shopping services:`, services);
 
             const checkoutService = services?.find(
-                svc => svc.name === 'dev.ucp.shopping.checkout'
+                svc => svc.transport === 'rest'
             );
             console.log(`[Checkout] Checkout service found:`, checkoutService);
 
