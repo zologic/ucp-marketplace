@@ -7,6 +7,7 @@
 const stripe = process.env.STRIPE_SECRET_KEY
     ? require('stripe')(process.env.STRIPE_SECRET_KEY)
     : null;
+const { sendEmail } = require('../../api/services/emailService');
 
 async function generateInvoices(db) {
     const startTime = Date.now();
@@ -218,6 +219,25 @@ async function generateInvoices(db) {
                         )
                       )
                 `, [merchant_id, periodStartStr, periodEndStr, merchant.cpc_billing_enabled, merchant.cpc_enabled_at]);
+
+                // Send email notification to merchant
+                const contactResult = await db.query(
+                    'SELECT email FROM merchant_contacts WHERE merchant_id = $1 AND role = $2 LIMIT 1',
+                    [merchant_id, 'billing']
+                );
+
+                if (contactResult.rows.length > 0) {
+                    const contactEmail = contactResult.rows[0].email;
+                    const dueDate = new Date();
+                    dueDate.setDate(dueDate.getDate() + 15);
+
+                    await sendEmail(contactEmail, 'invoice_generated', {
+                        invoice_number: invoiceNumber,
+                        amount: `${(totalCents / 100).toFixed(2)} ${billing.currency}`,
+                        due_date: dueDate.toISOString().split('T')[0],
+                        merchant_domain: merchant.domain
+                    });
+                }
 
                 invoicesCreated++;
                 console.log(`[generateInvoices] ✓ Created invoice ${invoiceNumber}: ${(totalCents / 100).toFixed(2)} ${billing.currency}`);

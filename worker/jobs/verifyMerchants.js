@@ -5,6 +5,7 @@
 
 const axios = require('axios');
 const { parseUcpManifest } = require('../../api/utils/ucpParser');
+const { sendEmail } = require('../../api/services/emailService');
 
 async function verifyMerchants(db) {
     const startTime = Date.now();
@@ -64,6 +65,7 @@ async function verifyMerchants(db) {
 
                 // Update merchant as verified
                 const newStatus = merchant.status === 'pending' ? 'verified' : merchant.status;
+                const wasJustVerified = merchant.status === 'pending';
 
                 await db.query(`
                     UPDATE merchants
@@ -93,6 +95,14 @@ async function verifyMerchants(db) {
                     newStatus,
                     merchant.id
                 ]);
+
+                // Send welcome email if merchant was just verified for the first time
+                if (wasJustVerified && contactEmail) {
+                    await sendEmail(contactEmail, 'merchant_verified', {
+                        merchant_domain: merchant.domain,
+                        dashboard_link: `${process.env.APP_URL}/admin`
+                    });
+                }
 
                 successCount++;
                 console.log(`[verifyMerchants] ✓ ${merchant.domain}`);

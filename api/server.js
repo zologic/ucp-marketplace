@@ -20,6 +20,11 @@ const stripeWebhookRoutes = require('./routes/stripe-webhooks');
 const { resolveTenant } = require('./middleware/tenant');
 const { errorHandler } = require('./middleware/errorHandler');
 
+// GraphQL
+const { graphqlHTTP } = require('express-graphql');
+const schema = require('./graphql/schema');
+const { resolvers, nestedResolvers } = require('./graphql/resolvers');
+
 const app = express();
 const PORT = process.env.API_PORT || 3000;
 
@@ -98,6 +103,26 @@ app.use('/api/webhooks', resolveTenant, webhookRoutes);
 
 // Internal routes (service-to-service, no public exposure)
 app.use('/internal', internalRoutes);
+
+// GraphQL API (optional, enabled by default in development)
+const graphqlEnabled = process.env.GRAPHQL_ENABLED !== 'false';
+if (graphqlEnabled) {
+    app.use('/graphql', graphqlHTTP((req) => ({
+        schema: schema,
+        rootValue: resolvers,
+        graphiql: process.env.NODE_ENV !== 'production',
+        context: { db: req.app.locals.db, redis: req.app.locals.redis },
+        fieldResolver: (source, args, context, info) => {
+            // Custom field resolver for nested data
+            if (nestedResolvers[info.parentType.name] && nestedResolvers[info.parentType.name][info.fieldName]) {
+                return nestedResolvers[info.parentType.name][info.fieldName](source, args, context, info);
+            }
+            // Default resolver
+            return source[info.fieldName];
+        }
+    })));
+    console.log(`GraphQL endpoint enabled at /graphql (GraphiQL: ${process.env.NODE_ENV !== 'production'})`);
+}
 
 // Error handling
 app.use(errorHandler);
