@@ -16,7 +16,7 @@ bizform.app {
         X-XSS-Protection "1; mode=block"
         Referrer-Policy "strict-origin-when-cross-origin"
         # Content-Security-Policy to allow loading merchant checkouts in iframes
-        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-src *; frame-ancestors 'self'"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: https:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self'; frame-src *; frame-ancestors 'self'"
         # CORS headers for mobile apps (development - restrict in production)
         Access-Control-Allow-Origin "*"
         Access-Control-Allow-Methods "GET, POST, OPTIONS, PUT, DELETE"
