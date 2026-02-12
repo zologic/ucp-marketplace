@@ -240,11 +240,18 @@ function extractServiceBaseUrl(manifest) {
 /**
  * Extract and validate public key from manifest
  * Supports both old format (public_key string) and new format (signing_keys JWK array)
+ * UCP 2026: signing_keys at manifest.ucp.signing_keys
  */
 function extractPublicKey(manifest) {
+  // Try UCP 2026 format: manifest.ucp.signing_keys
+  let signingKeys = manifest.signing_keys;
+  if (!signingKeys && manifest.ucp && manifest.ucp.signing_keys) {
+    signingKeys = manifest.ucp.signing_keys;
+  }
+
   // Try new format first: signing_keys array with JWK objects
-  if (manifest.signing_keys && Array.isArray(manifest.signing_keys) && manifest.signing_keys.length > 0) {
-    const signingKey = manifest.signing_keys[0]; // Use first key
+  if (signingKeys && Array.isArray(signingKeys) && signingKeys.length > 0) {
+    const signingKey = signingKeys[0]; // Use first key
 
     // Validate JWK structure
     if (signingKey.kty !== 'OKP' || signingKey.crv !== 'Ed25519') {
@@ -283,11 +290,18 @@ function extractPublicKey(manifest) {
 /**
  * Extract signing key ID from manifest
  * Supports both old format (signing_key_id string) and new format (signing_keys[].kid)
+ * UCP 2026: signing_keys at manifest.ucp.signing_keys
  */
 function extractSigningKeyId(manifest) {
+  // Try UCP 2026 format: manifest.ucp.signing_keys
+  let signingKeys = manifest.signing_keys;
+  if (!signingKeys && manifest.ucp && manifest.ucp.signing_keys) {
+    signingKeys = manifest.ucp.signing_keys;
+  }
+
   // Try new format first: signing_keys array with kid field
-  if (manifest.signing_keys && Array.isArray(manifest.signing_keys) && manifest.signing_keys.length > 0) {
-    const signingKey = manifest.signing_keys[0]; // Use first key
+  if (signingKeys && Array.isArray(signingKeys) && signingKeys.length > 0) {
+    const signingKey = signingKeys[0]; // Use first key
 
     if (signingKey.kid && typeof signingKey.kid === 'string') {
       return signingKey.kid.trim();
@@ -308,13 +322,20 @@ function extractSigningKeyId(manifest) {
  * Extract and discover capabilities from manifest
  */
 function extractCapabilities(manifest, serviceBaseUrl) {
-  if (!manifest.capabilities || !Array.isArray(manifest.capabilities)) {
+  // UCP 2026 format: capabilities at manifest.ucp.capabilities
+  // Old format: capabilities at manifest.capabilities
+  let capabilitiesArray = manifest.capabilities;
+  if (!capabilitiesArray && manifest.ucp && manifest.ucp.capabilities) {
+    capabilitiesArray = manifest.ucp.capabilities;
+  }
+
+  if (!capabilitiesArray || !Array.isArray(capabilitiesArray)) {
     throw new UcpValidationError('capabilities must be an array', {
       field: 'capabilities'
     });
   }
 
-  if (manifest.capabilities.length === 0) {
+  if (capabilitiesArray.length === 0) {
     throw new UcpValidationError('capabilities array cannot be empty', {
       field: 'capabilities'
     });
@@ -331,7 +352,7 @@ function extractCapabilities(manifest, serviceBaseUrl) {
   ];
 
   const discoveredCapabilities = standardCapabilities.map(capabilityName => {
-    return discoverCapability(manifest.capabilities, capabilityName, serviceBaseUrl);
+    return discoverCapability(capabilitiesArray, capabilityName, serviceBaseUrl);
   });
 
   // UCP 2026: Check for embedded transport in services
