@@ -342,14 +342,10 @@ router.post('/checkout', async (req, res) => {
                 try {
                     // Call merchant's UCP API to create checkout session
                     const checkoutResponse = await axios.post(checkoutService.endpoint, {
-                        items: [{
-                            product_id: product.merchant_product_id,
-                            quantity: quantity,
-                            variations: selected_variations
-                        }],
-                        referral_id: referralId,
-                        return_url: `${process.env.APP_URL || 'https://bizform.app'}/checkout/complete`,
-                        cancel_url: `${process.env.APP_URL || 'https://bizform.app'}/checkout/cancel`
+                        line_items: [{
+                            product_id: parseInt(product.merchant_product_id),
+                            quantity: quantity
+                        }]
                     }, {
                         headers: {
                             'Content-Type': 'application/json'
