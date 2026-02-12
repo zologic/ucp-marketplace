@@ -332,11 +332,17 @@ router.post('/checkout', async (req, res) => {
         let supportsEmbeddedCheckout = false;
         let checkoutUrl = `https://${merchant.domain}/checkout?ref=${referralId}`;
 
+        console.log(`[Checkout] Merchant has ucp_manifest: ${!!merchant.ucp_manifest}, service_base_url: ${merchant.service_base_url}`);
+
         if (merchant.ucp_manifest && merchant.service_base_url) {
             // Look for checkout creation service
-            const checkoutService = merchant.ucp_manifest.ucp?.services?.['dev.ucp.shopping']?.find(
+            const services = merchant.ucp_manifest.ucp?.services?.['dev.ucp.shopping'];
+            console.log(`[Checkout] Found dev.ucp.shopping services:`, services);
+
+            const checkoutService = services?.find(
                 svc => svc.name === 'dev.ucp.shopping.checkout'
             );
+            console.log(`[Checkout] Checkout service found:`, checkoutService);
 
             if (checkoutService && checkoutService.endpoint) {
                 try {
