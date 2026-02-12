@@ -335,7 +335,7 @@ router.post('/checkout', async (req, res) => {
         if (merchant.ucp_manifest && merchant.service_base_url) {
             // Look for checkout creation service
             const checkoutService = merchant.ucp_manifest.ucp?.services?.['dev.ucp.shopping']?.find(
-                svc => svc.name === 'create_checkout_session'
+                svc => svc.name === 'dev.ucp.shopping.checkout'
             );
 
             if (checkoutService && checkoutService.endpoint) {
