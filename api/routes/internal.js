@@ -5,6 +5,7 @@
 
 const express = require('express');
 const router = express.Router();
+const { indexProducts } = require('../jobs/indexProducts');
 
 // GET /internal/active-merchants - Get active merchants for MCP server
 router.get('/active-merchants', async (req, res) => {
@@ -67,6 +68,29 @@ router.get('/tenant-by-domain', async (req, res) => {
     } catch (error) {
         console.error('Get tenant error:', error);
         res.status(500).json({ error: 'Failed to get tenant' });
+    }
+});
+
+// POST /internal/trigger-index - Manually trigger product indexing
+router.post('/trigger-index', async (req, res) => {
+    try {
+        console.log('[internal/trigger-index] Manual product indexing triggered');
+
+        // Run indexing job
+        const result = await indexProducts(req.app.locals.db);
+
+        res.json({
+            success: true,
+            message: 'Product indexing completed',
+            result: result
+        });
+    } catch (error) {
+        console.error('[internal/trigger-index] Product indexing failed:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Product indexing failed',
+            message: error.message
+        });
     }
 });
 
