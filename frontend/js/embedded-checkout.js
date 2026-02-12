@@ -126,8 +126,11 @@ function buildEcpUrl(baseUrl, referralId) {
     const url = new URL(baseUrl);
     url.searchParams.set('ec_version', ECP_VERSION);
     url.searchParams.set('ec_delegate', ECP_DELEGATIONS.join(','));
-    // Add ec_auth token (use referral ID as token for now)
-    url.searchParams.set('ec_auth', referralId);
+    // Only add ec_auth if the URL doesn't already have a token parameter
+    // (merchant's API may have already included authentication)
+    if (!url.searchParams.has('token') && !url.pathname.match(/\/[a-f0-9-]{36}\/?$/)) {
+        url.searchParams.set('ec_auth', referralId);
+    }
     return url.toString();
 }
 
