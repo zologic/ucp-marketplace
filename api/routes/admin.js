@@ -486,6 +486,60 @@ router.post('/merchants/:id/recrawl', requireAuth, async (req, res) => {
     }
 });
 
+// POST /admin/merchants/:id/index - Trigger product indexing for a merchant
+router.post('/merchants/:id/index', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Validate merchant exists and is active
+        const merchantResult = await req.app.locals.db.query(
+            'SELECT id, domain, status FROM merchants WHERE id = $1',
+            [id]
+        );
+
+        if (merchantResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Merchant not found' });
+        }
+
+        const merchant = merchantResult.rows[0];
+
+        if (merchant.status !== 'active' && merchant.status !== 'verified') {
+            return res.status(400).json({
+                error: 'Merchant must be active or verified to index products',
+                status: merchant.status
+            });
+        }
+
+        // Import and trigger indexing function
+        const { indexMerchantProducts } = require('../../worker/jobs/indexProducts');
+
+        // Run indexing asynchronously
+        indexMerchantProducts(req.app.locals.db, req.app.locals.redis, id)
+            .then((result) => {
+                console.log(`✓ Indexing completed for ${merchant.domain}:`, result);
+            })
+            .catch(err => {
+                console.error(`✗ Indexing failed for ${merchant.domain}:`, err.message);
+            });
+
+        // Log audit event
+        await req.app.locals.db.query(`
+            INSERT INTO audit_logs (admin_id, action, resource_type, resource_id, details, created_at)
+            VALUES ($1, $2, $3, $4, $5, NOW())
+        `, [req.admin.id, 'merchant_index_triggered', 'merchant', id, JSON.stringify({ domain: merchant.domain })]);
+
+        res.json({
+            success: true,
+            message: 'Product indexing started',
+            merchant_id: id,
+            domain: merchant.domain
+        });
+    } catch (error) {
+        console.error('Trigger indexing error:', error);
+        res.status(500).json({ error: 'Failed to trigger indexing' });
+    }
+});
+
 // GET /admin/merchants/:id/analytics - Get merchant analytics
 router.get('/merchants/:id/analytics', requireAuth, async (req, res) => {
     try {
