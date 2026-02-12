@@ -110,7 +110,9 @@ async function indexProducts(db) {
 
                                 if (isUCP2026Format) {
                                     // Transform UCP 2026 format to internal format
-                                    variations = transformUCP2026Variations(product.variations, product.price_cents || 0);
+                                    // Pass the ORIGINAL price before conversion for accurate modifiers
+                                    const originalPrice = product.price_cents || 0;
+                                    variations = transformUCP2026Variations(product.variations, originalPrice);
                                     hasVariations = variations.length > 0;
                                 } else {
                                     // Legacy format: array with {attribute, options}
@@ -324,11 +326,27 @@ function getErrorCode(error) {
 function transformUCP2026Variations(ucpVariations, basePrice) {
     const attributeGroups = {};
 
+    // Convert basePrice to cents if needed (same logic as main price conversion)
+    let basePriceCents;
+    if (basePrice < 100) {
+        basePriceCents = Math.round(basePrice * 100);
+    } else {
+        basePriceCents = basePrice;
+    }
+
     for (const variation of ucpVariations) {
         if (!variation.attributes) continue;
 
-        const variationPrice = variation.price || basePrice;
-        const priceModifier = variationPrice - basePrice;
+        // Convert variation price to cents
+        let variationPriceCents;
+        const varPrice = variation.price || basePrice;
+        if (varPrice < 100) {
+            variationPriceCents = Math.round(varPrice * 100);
+        } else {
+            variationPriceCents = varPrice;
+        }
+
+        const priceModifier = variationPriceCents - basePriceCents;
 
         // Extract each attribute (color, size, etc.)
         for (const [attrKey, attrValue] of Object.entries(variation.attributes)) {
