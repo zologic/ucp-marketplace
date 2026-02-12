@@ -339,10 +339,10 @@ router.post('/checkout', async (req, res) => {
 
             if (embeddedCheckoutCap && embeddedCheckoutCap.endpoint) {
                 supportsEmbeddedCheckout = true;
-                // Use the merchant's embedded checkout endpoint
-                checkoutUrl = embeddedCheckoutCap.endpoint.includes('?')
-                    ? `${embeddedCheckoutCap.endpoint}&ref=${referralId}`
-                    : `${embeddedCheckoutCap.endpoint}?ref=${referralId}`;
+                // Use the merchant's embedded checkout endpoint with session ID as path parameter
+                // Remove trailing slash if present, then append session ID
+                const endpointBase = embeddedCheckoutCap.endpoint.replace(/\/$/, '');
+                checkoutUrl = `${endpointBase}/${referralId}`;
             }
         }
 
