@@ -110,7 +110,9 @@ async function indexProducts(db) {
 
                                 if (isUCP2026Format) {
                                     // Transform UCP 2026 format to internal format
-                                    variations = transformUCP2026Variations(product.variations, product.price_cents || 0);
+                                    // Pass the ORIGINAL price before conversion for accurate modifiers
+                                    const originalPrice = product.price_cents || 0;
+                                    variations = transformUCP2026Variations(product.variations, originalPrice);
                                     hasVariations = variations.length > 0;
                                 } else {
                                     // Legacy format: array with {attribute, options}
@@ -122,6 +124,24 @@ async function indexProducts(db) {
                                 variations = [];
                                 hasVariations = false;
                             }
+                        }
+
+                        // CRITICAL: Determine if price is in cents or currency units
+                        // WooCommerce sends "price" in currency units (10.00 = ten euros)
+                        // UCP spec requires "price_cents" in cents (1000 = ten euros)
+                        let priceCents;
+
+                        if (product.price_cents !== undefined) {
+                            // If price_cents exists but looks like currency units, convert
+                            // Heuristic: if < 100, it's likely currency units (e.g., 10 EUR)
+                            priceCents = product.price_cents < 100
+                                ? Math.round(product.price_cents * 100)
+                                : product.price_cents;
+                        } else if (product.price !== undefined) {
+                            // WooCommerce sends "price" in currency units - convert to cents
+                            priceCents = Math.round(parseFloat(product.price) * 100);
+                        } else {
+                            priceCents = 0;
                         }
 
                         await db.query(`
@@ -157,7 +177,7 @@ async function indexProducts(db) {
                             descriptionLong,
                             JSON.stringify(variations),
                             hasVariations,
-                            product.price_cents,
+                            priceCents,
                             product.currency || 'EUR',
                             product.category || null,
                             product.brand || null,
@@ -306,11 +326,27 @@ function getErrorCode(error) {
 function transformUCP2026Variations(ucpVariations, basePrice) {
     const attributeGroups = {};
 
+    // Convert basePrice to cents if needed (same logic as main price conversion)
+    let basePriceCents;
+    if (basePrice < 100) {
+        basePriceCents = Math.round(basePrice * 100);
+    } else {
+        basePriceCents = basePrice;
+    }
+
     for (const variation of ucpVariations) {
         if (!variation.attributes) continue;
 
-        const variationPrice = variation.price || basePrice;
-        const priceModifier = variationPrice - basePrice;
+        // Convert variation price to cents
+        let variationPriceCents;
+        const varPrice = variation.price || basePrice;
+        if (varPrice < 100) {
+            variationPriceCents = Math.round(varPrice * 100);
+        } else {
+            variationPriceCents = varPrice;
+        }
+
+        const priceModifier = variationPriceCents - basePriceCents;
 
         // Extract each attribute (color, size, etc.)
         for (const [attrKey, attrValue] of Object.entries(variation.attributes)) {
