@@ -149,7 +149,7 @@ router.post('/search', async (req, res) => {
 // ENHANCED: Server-side session IDs + Redis deduplication + Rate limiting (FRAUD PROTECTION)
 router.post('/checkout', async (req, res) => {
     try {
-        const { merchant_id, product_id, quantity = 1, selected_variations } = req.body;
+        const { merchant_id, product_id, quantity = 1, selected_variations, referral_source } = req.body;
         const tenantId = req.tenant.id;
 
         // SECURITY: Reject client-provided session_id (prevents fraud)
@@ -437,9 +437,9 @@ router.post('/checkout', async (req, res) => {
 
         // Create checkout session record
         await req.app.locals.db.query(`
-            INSERT INTO checkout_sessions (tenant_id, merchant_id, product_id, referral_id, session_url, status)
-            VALUES ($1, $2, $3, $4, $5, 'created')
-        `, [tenantId, merchant_id, product_id, referralId, checkoutUrl]);
+            INSERT INTO checkout_sessions (tenant_id, merchant_id, product_id, referral_id, session_url, status, referral_source)
+            VALUES ($1, $2, $3, $4, $5, 'created', $6)
+        `, [tenantId, merchant_id, product_id, referralId, checkoutUrl, referral_source || 'UNKNOWN']);
 
         // Return checkout info with embedded support flag
         res.json({

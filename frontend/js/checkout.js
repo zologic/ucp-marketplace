@@ -19,10 +19,15 @@ export async function handleCheckout(merchantId, productId, selectedVariations =
     try {
         const apiBase = window.location.origin + '/api';
 
+        // Capture referral source
+        const tenantDomain = window.location.hostname; // e.g., "shoes.shopucp.eu"
+        const referralSource = `UCP-${tenantDomain}`;
+
         const requestBody = {
             merchant_id: merchantId,
             product_id: productId,
-            quantity: 1
+            quantity: 1,
+            referral_source: referralSource
             // DO NOT send session_id - server generates it
         };
 

@@ -161,19 +161,19 @@ export const updateTenant = (id, data) => {
 
 // Admin Users
 export const getAdminUsers = (params) => {
-  return apiClient.get('/users', { params });
+  return apiClient.get('/admins', { params });
 };
 
 export const createAdminUser = (data) => {
-  return apiClient.post('/users', data);
+  return apiClient.post('/admins', data);
 };
 
 export const updateAdminUser = (id, data) => {
-  return apiClient.patch(`/users/${id}`, data);
+  return apiClient.patch(`/admins/${id}`, data);
 };
 
 export const deleteAdminUser = (id) => {
-  return apiClient.delete(`/users/${id}`);
+  return apiClient.delete(`/admins/${id}`);
 };
 
 // Audit Logs

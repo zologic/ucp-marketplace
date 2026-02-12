@@ -162,7 +162,7 @@ function AdminUsers() {
   };
 
   const getRoleBadge = (role) => {
-    return role === 'super_admin' ? 'badge-primary' : 'badge-secondary';
+    return role === 'superadmin' ? 'badge-primary' : 'badge-secondary';
   };
 
   const formatDate = (dateString) => {
@@ -398,7 +398,7 @@ function AdminUsers() {
               required
             >
               <option value="admin">Admin</option>
-              <option value="super_admin">Super Admin</option>
+              <option value="superadmin">Super Admin</option>
             </select>
           </div>
 
