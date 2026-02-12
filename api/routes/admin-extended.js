@@ -703,7 +703,7 @@ router.get('/analytics', requireAuth, async (req, res) => {
             FROM tenants t
             LEFT JOIN merchants m ON t.id = m.tenant_id
             LEFT JOIN merchant_daily_stats mds ON m.id = mds.merchant_id
-            ${dateFilter.replace('WHERE', 'AND')}
+            ${dateFilter ? 'WHERE mds.' + dateFilter.substring(6) : ''}
             GROUP BY t.id, t.name
             HAVING SUM(mds.revenue_cents) > 0
             ORDER BY revenue_cents DESC
@@ -724,7 +724,7 @@ router.get('/analytics', requireAuth, async (req, res) => {
                    COALESCE(SUM(mds.order_count), 0) as order_count
             FROM merchants m
             LEFT JOIN merchant_daily_stats mds ON m.id = mds.merchant_id
-            ${dateFilter.replace('WHERE', 'AND')}
+            ${dateFilter ? 'WHERE mds.' + dateFilter.substring(6) : ''}
             GROUP BY m.id, m.domain
             HAVING SUM(mds.revenue_cents) > 0
             ORDER BY revenue_cents DESC
