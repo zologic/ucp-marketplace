@@ -103,6 +103,10 @@ export const recrawlMerchant = (id) => {
   return apiClient.post(`/merchants/${id}/recrawl`);
 };
 
+export const indexMerchant = (id) => {
+  return apiClient.post(`/merchants/${id}/index`);
+};
+
 export const verifyMerchant = (id) => {
   return apiClient.post(`/merchants/${id}/verify`);
 };
@@ -180,6 +184,11 @@ export const getAuditLogs = (params) => {
 // System Health
 export const getSystemHealth = () => {
   return apiClient.get('/system/health');
+};
+
+// Stats Rollup
+export const triggerStatsRollup = () => {
+  return apiClient.post('/trigger-rollup');
 };
 
 export default apiClient;

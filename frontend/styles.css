@@ -545,6 +545,36 @@ body {
     text-decoration: line-through;
 }
 
+/* Mobile-specific variation improvements */
+@media (max-width: 768px) {
+    .variation-group label {
+        font-size: 13px;
+        margin-bottom: 8px;
+    }
+
+    .variation-options {
+        gap: 8px;
+    }
+
+    .variation-option {
+        min-height: 44px; /* Better touch target */
+        font-size: 14px; /* Slightly larger for readability */
+        padding: 10px 16px; /* More padding for touch */
+        font-weight: 500; /* Better contrast */
+        border: 2px solid #666; /* Darker border for better visibility */
+    }
+
+    .variation-option.selected {
+        border-color: #000;
+        background: #000;
+        font-weight: 700;
+    }
+
+    .variation-option:hover:not(:disabled) {
+        border-color: #333;
+    }
+}
+
 .buy-button {
     width: 100%;
     height: 44px;

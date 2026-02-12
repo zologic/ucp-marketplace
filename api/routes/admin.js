@@ -553,15 +553,15 @@ router.post('/merchants/:id/recrawl', requireAuth, async (req, res) => {
     }
 });
 
-// POST /admin/merchants/:id/index - Trigger product indexing for a merchant
+// POST /admin/merchants/:id/index - Trigger product indexing using worker job
 router.post('/merchants/:id/index', requireAuth, async (req, res) => {
     try {
-        const { id } = req.params;
+        const merchantId = req.params.id;
 
-        // Validate merchant exists and is active
+        // Verify merchant exists
         const merchantResult = await req.app.locals.db.query(
-            'SELECT id, domain, status FROM merchants WHERE id = $1',
-            [id]
+            'SELECT id, domain FROM merchants WHERE id = $1',
+            [merchantId]
         );
 
         if (merchantResult.rows.length === 0) {
@@ -570,40 +570,50 @@ router.post('/merchants/:id/index', requireAuth, async (req, res) => {
 
         const merchant = merchantResult.rows[0];
 
-        if (merchant.status !== 'active' && merchant.status !== 'verified') {
-            return res.status(400).json({
-                error: 'Merchant must be active or verified to index products',
-                status: merchant.status
-            });
-        }
+        // Reset last_indexed_at to trigger immediate re-index
+        await req.app.locals.db.query(
+            'UPDATE merchants SET last_indexed_at = NULL WHERE id = $1',
+            [merchantId]
+        );
 
-        // Import and trigger indexing function
-        const { indexMerchantProducts } = require('../../worker/jobs/indexProducts');
-
-        // Run indexing asynchronously
-        indexMerchantProducts(req.app.locals.db, req.app.locals.redis, id)
-            .then((result) => {
-                console.log(`✓ Indexing completed for ${merchant.domain}:`, result);
-            })
-            .catch(err => {
-                console.error(`✗ Indexing failed for ${merchant.domain}:`, err.message);
-            });
-
-        // Log audit event
-        await req.app.locals.db.query(`
-            INSERT INTO audit_logs (admin_id, action, resource_type, resource_id, details, created_at)
-            VALUES ($1, $2, $3, $4, $5, NOW())
-        `, [req.admin.id, 'merchant_index_triggered', 'merchant', id, JSON.stringify({ domain: merchant.domain })]);
+        // Import and run indexProducts job
+        const { indexProducts } = require('../jobs/indexProducts');
+        const result = await indexProducts(req.app.locals.db);
 
         res.json({
             success: true,
-            message: 'Product indexing started',
-            merchant_id: id,
-            domain: merchant.domain
+            message: `Product indexing triggered for ${merchant.domain}`,
+            result: result
         });
     } catch (error) {
-        console.error('Trigger indexing error:', error);
-        res.status(500).json({ error: 'Failed to trigger indexing' });
+        console.error('[Admin] Index products error:', error);
+        res.status(500).json({
+            error: 'Failed to trigger indexing',
+            details: error.message
+        });
+    }
+});
+
+// POST /admin/trigger-rollup - Manually trigger stats rollup job
+router.post('/trigger-rollup', requireAuth, async (req, res) => {
+    try {
+        console.log('[Admin] Manual stats rollup triggered');
+
+        // Import and run rollupStats job
+        const { rollupStats } = require('../../worker/jobs/rollupStats');
+        const result = await rollupStats(req.app.locals.db);
+
+        res.json({
+            success: true,
+            message: 'Stats rollup completed',
+            result: result
+        });
+    } catch (error) {
+        console.error('[Admin] Stats rollup error:', error);
+        res.status(500).json({
+            error: 'Failed to trigger stats rollup',
+            details: error.message
+        });
     }
 });
 
