@@ -55,8 +55,46 @@ async function verifyMerchants(db) {
                 const serviceBaseUrl = parsed.serviceBaseUrl;
                 const publicKey = parsed.publicKey;
                 const signingKeyId = parsed.signingKeyId;
-                const capabilities = parsed.capabilities;
+                let capabilities = parsed.capabilities;
                 const fullManifest = parsed.rawManifest;
+
+                // Validate embedded checkout endpoint if present
+                const embeddedCheckoutCap = capabilities.find(
+                    cap => cap.name === 'dev.ucp.shopping.embedded_checkout' && cap.supported === true
+                );
+
+                if (embeddedCheckoutCap && embeddedCheckoutCap.endpoint) {
+                    try {
+                        // Test the embedded checkout endpoint
+                        const testResponse = await axios.head(embeddedCheckoutCap.endpoint, {
+                            timeout: 5000,
+                            validateStatus: (status) => status < 500
+                        });
+
+                        // If endpoint returns 404 or 405, mark as not supported
+                        if (testResponse.status === 404 || testResponse.status === 405) {
+                            console.log(`[verifyMerchants] ${merchant.domain}: Embedded checkout endpoint exists in manifest but returns ${testResponse.status}`);
+
+                            // Mark capability as not supported
+                            capabilities = capabilities.map(cap => {
+                                if (cap.name === 'dev.ucp.shopping.embedded_checkout') {
+                                    return { ...cap, supported: false, validation_error: `Endpoint returned ${testResponse.status}` };
+                                }
+                                return cap;
+                            });
+                        }
+                    } catch (error) {
+                        // If endpoint is unreachable, mark as not supported
+                        console.log(`[verifyMerchants] ${merchant.domain}: Embedded checkout endpoint validation failed: ${error.message}`);
+
+                        capabilities = capabilities.map(cap => {
+                            if (cap.name === 'dev.ucp.shopping.embedded_checkout') {
+                                return { ...cap, supported: false, validation_error: error.message };
+                            }
+                            return cap;
+                        });
+                    }
+                }
 
                 // Update merchant as verified
                 const newStatus = merchant.status === 'pending' ? 'verified' : merchant.status;
