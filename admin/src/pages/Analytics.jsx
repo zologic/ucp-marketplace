@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Button from '../components/Button.jsx';
 import Input from '../components/Input.jsx';
-import { getAnalytics, exportAnalytics } from '../api/client.js';
+import { getAnalytics, exportAnalytics, triggerStatsRollup } from '../api/client.js';
 import { Line, Bar, Pie } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -33,6 +33,7 @@ function Analytics() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [rollingUp, setRollingUp] = useState(false);
 
   // Date filters
   const [startDate, setStartDate] = useState(() => {
@@ -93,6 +94,19 @@ function Analytics() {
     }
   };
 
+  const handleRollup = async () => {
+    try {
+      setRollingUp(true);
+      await triggerStatsRollup();
+      // Refresh analytics after rollup
+      await fetchAnalytics();
+    } catch (err) {
+      setError('Failed to trigger stats rollup');
+    } finally {
+      setRollingUp(false);
+    }
+  };
+
   const formatCurrency = (cents) => {
     return new Intl.NumberFormat('en-EU', {
       style: 'currency',
@@ -131,10 +145,16 @@ function Analytics() {
           </h1>
           <p className="page-description">Track referral conversions and revenue performance</p>
         </div>
-        <Button variant="primary" onClick={handleExport} disabled={exporting}>
-          <i className="fas fa-file-csv"></i>
-          {exporting ? 'Exporting...' : 'Export CSV'}
-        </Button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Button variant="secondary" onClick={handleRollup} disabled={rollingUp}>
+            <i className="fas fa-sync"></i>
+            {rollingUp ? 'Processing...' : 'Rollup Stats'}
+          </Button>
+          <Button variant="primary" onClick={handleExport} disabled={exporting}>
+            <i className="fas fa-file-csv"></i>
+            {exporting ? 'Exporting...' : 'Export CSV'}
+          </Button>
+        </div>
       </div>
 
       {/* Date Range Filter */}

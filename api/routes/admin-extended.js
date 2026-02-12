@@ -650,7 +650,7 @@ router.get('/analytics', requireAuth, async (req, res) => {
             endDate = new Date().toISOString().split('T')[0];
         }
 
-        // 1. Aggregate metrics
+        // 1. Aggregate metrics from daily stats (historical data)
         const metricsResult = await req.app.locals.db.query(`
             SELECT
                 COALESCE(SUM(search_count), 0) as total_searches,
@@ -661,11 +661,26 @@ router.get('/analytics', requireAuth, async (req, res) => {
             ${dateFilter}
         `, params);
 
+        // Add today's real-time data (not yet rolled up)
+        const todayStr = new Date().toISOString().split('T')[0];
+        const realtimeResult = await req.app.locals.db.query(`
+            SELECT
+                (SELECT COUNT(*) FROM search_events WHERE DATE(created_at) = $1) as search_count,
+                (SELECT COUNT(*) FROM click_events WHERE DATE(created_at) = $1) as click_count,
+                (SELECT COUNT(*) FROM checkout_sessions WHERE DATE(created_at) = $1 AND status != 'abandoned') as checkout_count,
+                (SELECT COALESCE(SUM(revenue_cents), 0) FROM orders WHERE DATE(created_at) = $1) as revenue_cents
+        `, [todayStr]);
+
         const metricsData = metricsResult.rows[0];
+        const realtimeData = realtimeResult.rows[0];
+
+        // Combine historical + today's real-time data
+        const totalSearches = parseInt(metricsData.total_searches) + parseInt(realtimeData.search_count);
+        const totalClicks = parseInt(metricsData.total_clicks) + parseInt(realtimeData.click_count);
+        const totalCheckouts = parseInt(metricsData.total_checkouts) + parseInt(realtimeData.checkout_count);
+        const totalRevenueCents = parseInt(metricsData.total_revenue_cents) + parseInt(realtimeData.revenue_cents);
 
         // Calculate CTR (avoid division by zero)
-        const totalSearches = parseInt(metricsData.total_searches);
-        const totalClicks = parseInt(metricsData.total_clicks);
         const ctr = totalSearches > 0 ? (totalClicks / totalSearches) * 100 : 0;
 
         // 2. Get referral conversions
@@ -755,10 +770,10 @@ router.get('/analytics', requireAuth, async (req, res) => {
                 total_searches: totalSearches,
                 total_clicks: totalClicks,
                 ctr: parseFloat(ctr.toFixed(2)),
-                total_checkouts: parseInt(metricsData.total_checkouts),
+                total_checkouts: totalCheckouts,
                 referral_conversions: referralConversions,
                 conversion_rate: parseFloat(conversionRate.toFixed(2)),
-                total_revenue_cents: parseInt(metricsData.total_revenue_cents)
+                total_revenue_cents: totalRevenueCents
             },
             trends: trends,
             revenue_by_tenant: revenueByTenantResult.rows.map(row => ({

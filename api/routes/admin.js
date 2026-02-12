@@ -553,6 +553,70 @@ router.post('/merchants/:id/recrawl', requireAuth, async (req, res) => {
     }
 });
 
+// POST /admin/merchants/:id/index - Trigger product indexing using worker job
+router.post('/merchants/:id/index', requireAuth, async (req, res) => {
+    try {
+        const merchantId = req.params.id;
+
+        // Verify merchant exists
+        const merchantResult = await req.app.locals.db.query(
+            'SELECT id, domain FROM merchants WHERE id = $1',
+            [merchantId]
+        );
+
+        if (merchantResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Merchant not found' });
+        }
+
+        const merchant = merchantResult.rows[0];
+
+        // Reset last_indexed_at to trigger immediate re-index
+        await req.app.locals.db.query(
+            'UPDATE merchants SET last_indexed_at = NULL WHERE id = $1',
+            [merchantId]
+        );
+
+        // Import and run indexProducts job
+        const { indexProducts } = require('../jobs/indexProducts');
+        const result = await indexProducts(req.app.locals.db);
+
+        res.json({
+            success: true,
+            message: `Product indexing triggered for ${merchant.domain}`,
+            result: result
+        });
+    } catch (error) {
+        console.error('[Admin] Index products error:', error);
+        res.status(500).json({
+            error: 'Failed to trigger indexing',
+            details: error.message
+        });
+    }
+});
+
+// POST /admin/trigger-rollup - Manually trigger stats rollup job
+router.post('/trigger-rollup', requireAuth, async (req, res) => {
+    try {
+        console.log('[Admin] Manual stats rollup triggered');
+
+        // Import and run rollupStats job
+        const { rollupStats } = require('../../worker/jobs/rollupStats');
+        const result = await rollupStats(req.app.locals.db);
+
+        res.json({
+            success: true,
+            message: 'Stats rollup completed',
+            result: result
+        });
+    } catch (error) {
+        console.error('[Admin] Stats rollup error:', error);
+        res.status(500).json({
+            error: 'Failed to trigger stats rollup',
+            details: error.message
+        });
+    }
+});
+
 // GET /admin/merchants/:id/analytics - Get merchant analytics
 router.get('/merchants/:id/analytics', requireAuth, async (req, res) => {
     try {
