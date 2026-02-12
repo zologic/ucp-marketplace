@@ -385,6 +385,31 @@ function discoverCapability(capabilities, capabilityName, serviceBaseUrl) {
     };
   }
 
+  // UCP 2026 format: Capabilities are just declarations with name, version, spec
+  // Endpoints are inferred from the REST service base URL + capability name as path
+  if (!capability.transports && !capability.path) {
+    // UCP 2026 format detected - capabilities exist but don't have explicit endpoints
+    // Infer endpoint from service base URL + standardized path
+    const capabilityPath = inferCapabilityPath(capabilityName);
+
+    if (!capabilityPath) {
+      return {
+        name: capabilityName,
+        supported: false
+      };
+    }
+
+    return {
+      name: capabilityName,
+      supported: true,
+      endpoint: constructEndpointUrl(serviceBaseUrl, capabilityPath),
+      path: capabilityPath,
+      transport: 'rest',
+      version: capability.version || null
+    };
+  }
+
+  // Old format validation
   // Validate capability structure
   if (!capability.transports || !Array.isArray(capability.transports)) {
     return {
@@ -419,6 +444,27 @@ function discoverCapability(capabilities, capabilityName, serviceBaseUrl) {
     path: capability.path,
     transport: 'rest'
   };
+}
+
+/**
+ * Infer standard capability path from capability name for UCP 2026 format
+ * @param {string} capabilityName - Capability name (e.g., 'dev.ucp.shopping.products')
+ * @returns {string|null} Inferred path or null if unknown
+ */
+function inferCapabilityPath(capabilityName) {
+  // Standard UCP capability paths
+  const pathMap = {
+    'dev.ucp.shopping.products': '/products',
+    'dev.ucp.shopping.checkout': '/checkout',
+    'dev.ucp.shopping.search': '/search',
+    'dev.ucp.shopping.webhooks': '/webhooks',
+    'dev.ucp.shopping.order': '/order',
+    'dev.ucp.shopping.fulfillment': '/fulfillment',
+    'dev.ucp.shopping.discount': '/discount',
+    'dev.ucp.shopping.buyer_consent': '/buyer-consent'
+  };
+
+  return pathMap[capabilityName] || null;
 }
 
 /**
