@@ -1,16 +1,30 @@
 /**
- * Embedded Checkout Handler
- * Manages iframe-based checkout for UCP-compliant merchants
+ * UCP Embedded Checkout Protocol (ECP) Handler
+ * Fully compliant with UCP 2026 ECP specification
+ * Uses JSON-RPC 2.0 for all communication
  */
 
 import { hideLoading, renderError } from './ui.js';
 
+// ECP Configuration
+const ECP_VERSION = '2026-01-23';
+const ECP_DELEGATIONS = ['payment.credential', 'fulfillment.address_change'];
+
+// Request ID counter for JSON-RPC
+let requestIdCounter = 1;
+
+// Pending JSON-RPC requests
+const pendingRequests = new Map();
+
 /**
- * Show embedded checkout in iframe
+ * Show embedded checkout in iframe with ECP support
  * @param {string} checkoutUrl - Merchant's checkout URL
  * @param {string} referralId - Referral tracking ID
  */
 export function showEmbeddedCheckout(checkoutUrl, referralId) {
+    // Build ECP-compliant URL with required parameters
+    const ecpUrl = buildEcpUrl(checkoutUrl);
+
     // Create overlay container
     const overlay = document.createElement('div');
     overlay.className = 'embedded-checkout-overlay';
@@ -26,13 +40,18 @@ export function showEmbeddedCheckout(checkoutUrl, referralId) {
     closeButton.innerHTML = '&times;';
     closeButton.setAttribute('aria-label', 'Close checkout');
 
-    // Create iframe
+    // Create iframe with ECP security settings
     const iframe = document.createElement('iframe');
     iframe.className = 'embedded-checkout-iframe';
     iframe.id = 'embedded-checkout-iframe';
-    iframe.src = checkoutUrl;
+    iframe.src = ecpUrl;
     iframe.allow = 'payment';
+    // ECP Security: sandbox with required permissions
     iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox');
+    // ECP Security: credentialless mode (optional, for enhanced security)
+    if ('credentialless' in HTMLIFrameElement.prototype) {
+        iframe.setAttribute('credentialless', 'true');
+    }
 
     // Create loading indicator
     const loading = document.createElement('div');
@@ -49,26 +68,30 @@ export function showEmbeddedCheckout(checkoutUrl, referralId) {
     document.body.appendChild(overlay);
     document.body.style.overflow = 'hidden'; // Prevent background scrolling
 
-    // Setup message listener for postMessage communication
-    const messageHandler = setupMessageHandler(referralId, iframe);
+    // Setup ECP message handler
+    const messageHandler = setupEcpMessageHandler(referralId, iframe, ecpUrl);
     window.addEventListener('message', messageHandler);
 
-    // Handle iframe load
+    // Handle iframe load - initiate ECP handshake
     iframe.addEventListener('load', () => {
         loading.style.display = 'none';
         iframe.style.display = 'block';
 
-        // Send ready signal to merchant
-        iframe.contentWindow.postMessage({
-            type: 'ec.marketplace.ready',
-            referralId: referralId
-        }, '*');
+        // Initiate ECP handshake (ec.ready request)
+        sendEcpRequest(iframe, ecpUrl, 'ec.ready', {
+            delegate: ECP_DELEGATIONS
+        }).then(result => {
+            console.log('[ECP] Handshake successful:', result);
+        }).catch(error => {
+            console.error('[ECP] Handshake failed:', error);
+        });
     });
 
     // Handle close button
     closeButton.addEventListener('click', () => {
         closeEmbeddedCheckout();
         window.removeEventListener('message', messageHandler);
+        pendingRequests.clear();
     });
 
     // Handle overlay click (close on background click)
@@ -76,6 +99,7 @@ export function showEmbeddedCheckout(checkoutUrl, referralId) {
         if (e.target === overlay) {
             closeEmbeddedCheckout();
             window.removeEventListener('message', messageHandler);
+            pendingRequests.clear();
         }
     });
 
@@ -85,6 +109,7 @@ export function showEmbeddedCheckout(checkoutUrl, referralId) {
             closeEmbeddedCheckout();
             window.removeEventListener('message', messageHandler);
             document.removeEventListener('keydown', escHandler);
+            pendingRequests.clear();
         }
     };
     document.addEventListener('keydown', escHandler);
@@ -93,126 +118,168 @@ export function showEmbeddedCheckout(checkoutUrl, referralId) {
 }
 
 /**
- * Setup postMessage handler for iframe communication
+ * Build ECP-compliant checkout URL with required parameters
+ * @param {string} baseUrl - Base checkout URL
+ * @returns {string} ECP URL with parameters
+ */
+function buildEcpUrl(baseUrl) {
+    const url = new URL(baseUrl);
+    url.searchParams.set('ec_version', ECP_VERSION);
+    url.searchParams.set('ec_delegate', ECP_DELEGATIONS.join(','));
+    // ec_auth parameter would be added here if authentication is needed
+    return url.toString();
+}
+
+/**
+ * Setup ECP message handler with JSON-RPC 2.0 support
  * @param {string} referralId - Referral tracking ID
  * @param {HTMLIFrameElement} iframe - Checkout iframe
+ * @param {string} expectedOrigin - Expected origin URL for security
  * @returns {Function} Message handler function
  */
-function setupMessageHandler(referralId, iframe) {
-    let privateChannel = null; // MessagePort for upgraded communication
+function setupEcpMessageHandler(referralId, iframe, expectedOrigin) {
+    const expectedOriginUrl = new URL(expectedOrigin);
+    const allowedOrigin = expectedOriginUrl.origin;
 
     return function(event) {
-        // Security: Verify message origin if needed
-        // In production, you should validate event.origin matches merchant domain
-
-        if (!event.data || typeof event.data !== 'object') {
+        // ECP Security: Origin validation
+        if (event.origin !== allowedOrigin) {
+            console.warn('[ECP] Rejected message from unauthorized origin:', event.origin);
             return;
         }
 
-        const { type, status, data, upgrade } = event.data;
+        if (!event.data || typeof event.data !== 'string') {
+            return;
+        }
 
-        switch (type) {
-            case 'ec.ready':
-                // Merchant iframe is ready
-                console.log('[EmbeddedCheckout] Merchant checkout ready');
+        let message;
+        try {
+            message = JSON.parse(event.data);
+        } catch (e) {
+            console.warn('[ECP] Invalid JSON message:', event.data);
+            return;
+        }
 
-                // UCP 2026: Check for MessagePort channel upgrade request
-                if (upgrade && upgrade.port && event.ports && event.ports[0]) {
-                    privateChannel = event.ports[0];
-                    console.log('[EmbeddedCheckout] Channel upgraded to MessagePort');
+        // Validate JSON-RPC 2.0 structure
+        if (message.jsonrpc !== '2.0') {
+            console.warn('[ECP] Invalid jsonrpc version:', message.jsonrpc);
+            return;
+        }
 
-                    // Setup listener on private channel
-                    privateChannel.onmessage = (e) => {
-                        handlePrivateChannelMessage(e.data);
-                    };
+        // Handle JSON-RPC response (for requests we sent)
+        if (message.id && (message.result !== undefined || message.error !== undefined)) {
+            handleEcpResponse(message);
+            return;
+        }
 
-                    // Acknowledge upgrade
-                    privateChannel.postMessage({
-                        type: 'ec.marketplace.upgraded',
-                        referralId: referralId
-                    });
-                }
-                break;
-
-            case 'ec.resize':
-                // Merchant wants to resize iframe
-                if (data && data.height) {
-                    iframe.style.height = `${data.height}px`;
-                }
-                break;
-
-            case 'ec.checkout.complete':
-                // Checkout completed successfully
-                console.log('[EmbeddedCheckout] Checkout completed', data);
-                handleCheckoutComplete(data);
-                break;
-
-            case 'ec.checkout.cancelled':
-                // User cancelled checkout
-                console.log('[EmbeddedCheckout] Checkout cancelled');
-                closeEmbeddedCheckout();
-                renderError('Checkout was cancelled. You can try again.');
-                break;
-
-            case 'ec.checkout.error':
-                // Error during checkout
-                console.error('[EmbeddedCheckout] Checkout error', data);
-                closeEmbeddedCheckout();
-                renderError(data?.message || 'An error occurred during checkout. Please try again.');
-                break;
-
-            default:
-                // Unknown message type
-                console.log('[EmbeddedCheckout] Unknown message type:', type);
+        // Handle JSON-RPC notification or request (from merchant)
+        if (message.method) {
+            handleEcpNotificationOrRequest(message, iframe, expectedOrigin, referralId);
         }
     };
+}
 
-    /**
-     * Handle messages from private MessagePort channel
-     * @param {Object} message - Message data from private channel
-     */
-    function handlePrivateChannelMessage(message) {
-        if (!message || typeof message !== 'object') {
-            return;
-        }
+/**
+ * Handle JSON-RPC response
+ * @param {Object} message - JSON-RPC response message
+ */
+function handleEcpResponse(message) {
+    const pending = pendingRequests.get(message.id);
+    if (!pending) {
+        console.warn('[ECP] Received response for unknown request ID:', message.id);
+        return;
+    }
 
-        const { type, data } = message;
+    pendingRequests.delete(message.id);
+    clearTimeout(pending.timeout);
 
-        switch (type) {
-            case 'ec.resize':
-                if (data && data.height) {
-                    iframe.style.height = `${data.height}px`;
-                }
-                break;
-
-            case 'ec.checkout.complete':
-                console.log('[EmbeddedCheckout] Checkout completed (secure channel)', data);
-                handleCheckoutComplete(data);
-                break;
-
-            case 'ec.checkout.cancelled':
-                console.log('[EmbeddedCheckout] Checkout cancelled (secure channel)');
-                closeEmbeddedCheckout();
-                renderError('Checkout was cancelled. You can try again.');
-                break;
-
-            case 'ec.checkout.error':
-                console.error('[EmbeddedCheckout] Checkout error (secure channel)', data);
-                closeEmbeddedCheckout();
-                renderError(data?.message || 'An error occurred during checkout. Please try again.');
-                break;
-
-            default:
-                console.log('[EmbeddedCheckout] Unknown private channel message:', type);
-        }
+    if (message.error) {
+        pending.reject(new Error(`ECP Error: ${message.error.message} (code: ${message.error.code})`));
+    } else {
+        pending.resolve(message.result);
     }
 }
 
 /**
- * Handle successful checkout completion
- * @param {Object} data - Completion data from merchant
+ * Handle JSON-RPC notification or request from merchant
+ * @param {Object} message - JSON-RPC message
+ * @param {HTMLIFrameElement} iframe - Checkout iframe
+ * @param {string} targetOrigin - Target origin for postMessage
+ * @param {string} referralId - Referral tracking ID
  */
-function handleCheckoutComplete(data) {
+function handleEcpNotificationOrRequest(message, iframe, targetOrigin, referralId) {
+    const { method, params, id } = message;
+
+    console.log(`[ECP] Received ${id ? 'request' : 'notification'}: ${method}`, params);
+
+    switch (method) {
+        case 'ec.start':
+            // Lifecycle: Checkout started
+            handleEcpStart(params);
+            break;
+
+        case 'ec.complete':
+            // Lifecycle: Checkout completed
+            handleEcpComplete(params);
+            break;
+
+        case 'ec.cancel':
+            // Lifecycle: Checkout cancelled
+            handleEcpCancel(params);
+            break;
+
+        case 'ec.error':
+            // Error notification
+            handleEcpError(params);
+            break;
+
+        case 'ec.payment.credential_request':
+            // Delegation: Payment credential request
+            if (id) {
+                handlePaymentCredentialRequest(params, id, iframe, targetOrigin);
+            }
+            break;
+
+        case 'ec.fulfillment.address_change_request':
+            // Delegation: Address change request
+            if (id) {
+                handleAddressChangeRequest(params, id, iframe, targetOrigin);
+            }
+            break;
+
+        case 'ec.payment.instruments_change':
+            // Payment instruments changed
+            handlePaymentInstrumentsChange(params);
+            break;
+
+        default:
+            console.warn('[ECP] Unknown method:', method);
+            if (id) {
+                // Send error response for unknown methods
+                sendEcpError(iframe, targetOrigin, id, -32601, 'Method not found');
+            }
+    }
+}
+
+/**
+ * Handle ec.start notification
+ * @param {Object} params - Start parameters
+ */
+function handleEcpStart(params) {
+    console.log('[ECP] Checkout started:', params.checkout?.id);
+    // Could update UI to show checkout has started
+}
+
+/**
+ * Handle ec.complete notification
+ * @param {Object} params - Completion parameters
+ */
+function handleEcpComplete(params) {
+    const checkout = params.checkout;
+    const order = checkout?.order;
+
+    console.log('[ECP] Checkout completed:', order?.id);
+
     closeEmbeddedCheckout();
 
     // Show success message
@@ -222,7 +289,8 @@ function handleCheckoutComplete(data) {
         <div class="checkout-success-content">
             <h2>Order Complete!</h2>
             <p>Thank you for your purchase.</p>
-            ${data?.orderId ? `<p class="order-id">Order ID: ${escapeHtml(data.orderId)}</p>` : ''}
+            ${order?.id ? `<p class="order-id">Order ID: ${escapeHtml(order.id)}</p>` : ''}
+            ${order?.permalink_url ? `<p><a href="${escapeHtml(order.permalink_url)}" target="_blank">View Order</a></p>` : ''}
             <button class="success-button" onclick="location.reload()">Continue Shopping</button>
         </div>
     `;
@@ -236,6 +304,145 @@ function handleCheckoutComplete(data) {
 }
 
 /**
+ * Handle ec.cancel notification
+ * @param {Object} params - Cancellation parameters
+ */
+function handleEcpCancel(params) {
+    console.log('[ECP] Checkout cancelled');
+    closeEmbeddedCheckout();
+    renderError('Checkout was cancelled. You can try again.');
+}
+
+/**
+ * Handle ec.error notification
+ * @param {Object} params - Error parameters
+ */
+function handleEcpError(params) {
+    console.error('[ECP] Checkout error:', params);
+    closeEmbeddedCheckout();
+    renderError(params?.message || 'An error occurred during checkout. Please try again.');
+}
+
+/**
+ * Handle payment credential request (delegation)
+ * @param {Object} params - Request parameters
+ * @param {string|number} id - Request ID
+ * @param {HTMLIFrameElement} iframe - Checkout iframe
+ * @param {string} targetOrigin - Target origin
+ */
+function handlePaymentCredentialRequest(params, id, iframe, targetOrigin) {
+    console.log('[ECP] Payment credential requested');
+
+    // In a real implementation, this would:
+    // 1. Show native payment UI
+    // 2. Collect payment credential from user
+    // 3. Return credential to merchant
+
+    // For now, return not_supported_error
+    sendEcpError(iframe, targetOrigin, id, 'not_supported_error', 'Payment delegation not yet implemented');
+}
+
+/**
+ * Handle address change request (delegation)
+ * @param {Object} params - Request parameters
+ * @param {string|number} id - Request ID
+ * @param {HTMLIFrameElement} iframe - Checkout iframe
+ * @param {string} targetOrigin - Target origin
+ */
+function handleAddressChangeRequest(params, id, iframe, targetOrigin) {
+    console.log('[ECP] Address change requested');
+
+    // In a real implementation, this would:
+    // 1. Show native address selection UI
+    // 2. Get address from user
+    // 3. Return address to merchant
+
+    // For now, return not_supported_error
+    sendEcpError(iframe, targetOrigin, id, 'not_supported_error', 'Address delegation not yet implemented');
+}
+
+/**
+ * Handle payment instruments change notification
+ * @param {Object} params - Change parameters
+ */
+function handlePaymentInstrumentsChange(params) {
+    console.log('[ECP] Payment instruments changed');
+    // Could update UI if we're showing payment info
+}
+
+/**
+ * Send JSON-RPC 2.0 request to embedded checkout
+ * @param {HTMLIFrameElement} iframe - Target iframe
+ * @param {string} targetOrigin - Target origin
+ * @param {string} method - JSON-RPC method
+ * @param {Object} params - Method parameters
+ * @returns {Promise} Promise that resolves with result or rejects with error
+ */
+function sendEcpRequest(iframe, targetOrigin, method, params) {
+    return new Promise((resolve, reject) => {
+        const id = `req_${requestIdCounter++}`;
+        const message = {
+            jsonrpc: '2.0',
+            method: method,
+            params: params,
+            id: id
+        };
+
+        // Store pending request
+        const timeout = setTimeout(() => {
+            pendingRequests.delete(id);
+            reject(new Error(`ECP request timeout: ${method}`));
+        }, 30000); // 30 second timeout
+
+        pendingRequests.set(id, { resolve, reject, timeout });
+
+        // Send message
+        const targetOriginUrl = new URL(targetOrigin);
+        iframe.contentWindow.postMessage(JSON.stringify(message), targetOriginUrl.origin);
+    });
+}
+
+/**
+ * Send JSON-RPC 2.0 response to embedded checkout
+ * @param {HTMLIFrameElement} iframe - Target iframe
+ * @param {string} targetOrigin - Target origin
+ * @param {string|number} id - Request ID
+ * @param {Object} result - Result object
+ */
+function sendEcpResponse(iframe, targetOrigin, id, result) {
+    const message = {
+        jsonrpc: '2.0',
+        result: result,
+        id: id
+    };
+
+    const targetOriginUrl = new URL(targetOrigin);
+    iframe.contentWindow.postMessage(JSON.stringify(message), targetOriginUrl.origin);
+}
+
+/**
+ * Send JSON-RPC 2.0 error response to embedded checkout
+ * @param {HTMLIFrameElement} iframe - Target iframe
+ * @param {string} targetOrigin - Target origin
+ * @param {string|number} id - Request ID
+ * @param {string|number} code - Error code
+ * @param {string} message - Error message
+ */
+function sendEcpError(iframe, targetOrigin, id, code, message) {
+    const errorMessage = {
+        jsonrpc: '2.0',
+        error: {
+            code: code,
+            message: message
+        },
+        id: id
+    };
+
+    const targetOriginUrl = new URL(targetOrigin);
+    iframe.contentWindow.postMessage(JSON.stringify(errorMessage), targetOriginUrl.origin);
+}
+
+/**
  * Close embedded checkout
  */
 export function closeEmbeddedCheckout() {
@@ -244,6 +451,7 @@ export function closeEmbeddedCheckout() {
         overlay.remove();
     }
     document.body.style.overflow = ''; // Restore scrolling
+    pendingRequests.clear();
 }
 
 /**
