@@ -7,7 +7,7 @@
  */
 
 const axios = require('axios');
-const { parseManifest } = require('../../api/utils/ucpParser');
+const { parseManifest } = require('/app/utils/ucpParser');
 
 async function indexProducts(db) {
     const startTime = Date.now();

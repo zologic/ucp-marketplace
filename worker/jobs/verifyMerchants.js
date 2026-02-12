@@ -4,8 +4,8 @@
  */
 
 const axios = require('axios');
-const { parseUcpManifest } = require('../../api/utils/ucpParser');
-const { sendEmail } = require('../../api/services/emailService');
+const { parseUcpManifest } = require('/app/utils/ucpParser');
+const { sendEmail } = require('/app/services/emailService');
 
 async function verifyMerchants(db) {
     const startTime = Date.now();

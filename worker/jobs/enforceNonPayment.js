@@ -4,7 +4,7 @@
  */
 
 const axios = require('axios');
-const { sendEmail } = require('../../api/services/emailService');
+const { sendEmail } = require('/app/services/emailService');
 
 async function enforceNonPayment(db) {
     const startTime = Date.now();
