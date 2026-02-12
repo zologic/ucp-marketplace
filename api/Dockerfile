@@ -20,13 +20,16 @@ COPY api/ .
 # Copy worker code (for background jobs when RUN_WORKER=true)
 COPY worker/ /worker
 
+# Link node_modules so worker can access dependencies
+RUN ln -s /app/node_modules /worker/node_modules
+
 # Copy database migrations to /database and scripts to /app
 COPY --chown=nodejs:nodejs database/ /database
 COPY --chown=nodejs:nodejs database/migrations_archive/migrate.js /app/migrate.js
 COPY --chown=nodejs:nodejs database/init-db.js /app/init-db.js
 
 # Change ownership to non-root user
-RUN chown -R nodejs:nodejs /app
+RUN chown -R nodejs:nodejs /app /worker
 
 # Switch to non-root user
 USER nodejs
