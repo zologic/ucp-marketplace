@@ -100,36 +100,7 @@ async function indexProducts(db) {
                             (product.description ? product.description.substring(0, 150) + (product.description.length > 150 ? '...' : '') : null);
                         const descriptionLong = product.description_long || product.description || null;
 
-                        // Process variations field - Support UCP 2026 format
-                        let variations = [];
-                        let hasVariations = false;
-
-                        if (product.variations && Array.isArray(product.variations) && product.variations.length > 0) {
-                            try {
-                                // Check if UCP 2026 format (array of items with id, title, price, attributes)
-                                const isUCP2026Format = product.variations[0] &&
-                                    product.variations[0].id &&
-                                    product.variations[0].attributes;
-
-                                if (isUCP2026Format) {
-                                    // Transform UCP 2026 format to internal format
-                                    // Pass the ORIGINAL price before conversion for accurate modifiers
-                                    const originalPrice = product.price_cents || 0;
-                                    variations = transformUCP2026Variations(product.variations, originalPrice);
-                                    hasVariations = variations.length > 0;
-                                } else {
-                                    // Legacy format: array with {attribute, options}
-                                    variations = product.variations.filter(v => v.attribute && Array.isArray(v.options));
-                                    hasVariations = variations.length > 0;
-                                }
-                            } catch (varError) {
-                                console.warn(`[indexProducts] Invalid variations for product ${product.id}:`, varError.message);
-                                variations = [];
-                                hasVariations = false;
-                            }
-                        }
-
-                        // CRITICAL: Determine if price is in cents or currency units
+                        // CRITICAL: Parse price FIRST (before variations processing needs it)
                         // WooCommerce UCP sends price.amount in cents (1000 = ten euros)
                         // Legacy formats may send price_cents or price in different formats
                         let priceCents;
@@ -147,6 +118,35 @@ async function indexProducts(db) {
                             priceCents = Math.round(parseFloat(product.price) * 100);
                         } else {
                             priceCents = 0;
+                        }
+
+                        // Process variations field - Support UCP 2026 format
+                        // IMPORTANT: This must come AFTER price parsing so priceCents is available
+                        let variations = [];
+                        let hasVariations = false;
+
+                        if (product.variations && Array.isArray(product.variations) && product.variations.length > 0) {
+                            try {
+                                // Check if UCP 2026 format (array of items with id, title, price, attributes)
+                                const isUCP2026Format = product.variations[0] &&
+                                    product.variations[0].id &&
+                                    product.variations[0].attributes;
+
+                                if (isUCP2026Format) {
+                                    // Transform UCP 2026 format to internal format
+                                    // Pass the already-parsed priceCents for accurate modifiers
+                                    variations = transformUCP2026Variations(product.variations, priceCents);
+                                    hasVariations = variations.length > 0;
+                                } else {
+                                    // Legacy format: array with {attribute, options}
+                                    variations = product.variations.filter(v => v.attribute && Array.isArray(v.options));
+                                    hasVariations = variations.length > 0;
+                                }
+                            } catch (varError) {
+                                console.warn(`[indexProducts] Invalid variations for product ${product.id}:`, varError.message);
+                                variations = [];
+                                hasVariations = false;
+                            }
                         }
 
                         // Extract image URL (handle both formats)
@@ -355,24 +355,25 @@ function getErrorCode(error) {
 function transformUCP2026Variations(ucpVariations, basePrice) {
     const attributeGroups = {};
 
-    // Convert basePrice to cents if needed (same logic as main price conversion)
-    let basePriceCents;
-    if (basePrice < 100) {
-        basePriceCents = Math.round(basePrice * 100);
-    } else {
-        basePriceCents = basePrice;
-    }
+    // basePrice is already in cents from the main price parsing
+    const basePriceCents = basePrice;
 
     for (const variation of ucpVariations) {
         if (!variation.attributes) continue;
 
-        // Convert variation price to cents
+        // Parse variation price - handle WooCommerce format {amount, currency} or plain number
         let variationPriceCents;
-        const varPrice = variation.price || basePrice;
-        if (varPrice < 100) {
-            variationPriceCents = Math.round(varPrice * 100);
+        if (variation.price && typeof variation.price === 'object' && variation.price.amount !== undefined) {
+            // WooCommerce UCP format: { price: { amount: 1000, currency: "EUR" } }
+            variationPriceCents = variation.price.amount;
+        } else if (typeof variation.price === 'number') {
+            // Plain number format - determine if cents or currency units
+            variationPriceCents = variation.price < 100
+                ? Math.round(variation.price * 100)
+                : variation.price;
         } else {
-            variationPriceCents = varPrice;
+            // No price specified, use base price
+            variationPriceCents = basePriceCents;
         }
 
         const priceModifier = variationPriceCents - basePriceCents;
