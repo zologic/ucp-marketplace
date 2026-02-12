@@ -357,16 +357,24 @@ router.post('/checkout', async (req, res) => {
                         timeout: 10000
                     });
 
-                    if (checkoutResponse.data && checkoutResponse.data.checkout_url) {
-                        checkoutUrl = checkoutResponse.data.checkout_url;
-
-                        // Check if merchant supports embedded checkout
-                        const embeddedCheckoutCap = merchant.ucp_manifest.capabilities?.find(
-                            cap => cap.name === 'dev.ucp.shopping.embedded_checkout' && cap.supported === true
-                        );
-
-                        if (embeddedCheckoutCap) {
+                    if (checkoutResponse.data) {
+                        // Check if merchant returns embedded_checkout_url (with token already included)
+                        if (checkoutResponse.data.status === 'requires_escalation' && checkoutResponse.data.embedded_checkout_url) {
+                            // Use the embedded checkout URL directly (already has token)
+                            checkoutUrl = checkoutResponse.data.embedded_checkout_url;
                             supportsEmbeddedCheckout = true;
+                        } else if (checkoutResponse.data.checkout_url) {
+                            // Use standard checkout URL
+                            checkoutUrl = checkoutResponse.data.checkout_url;
+
+                            // Check if merchant supports embedded checkout capability
+                            const embeddedCheckoutCap = merchant.ucp_manifest.capabilities?.find(
+                                cap => cap.name === 'dev.ucp.shopping.embedded_checkout' && cap.supported === true
+                            );
+
+                            if (embeddedCheckoutCap) {
+                                supportsEmbeddedCheckout = true;
+                            }
                         }
                     }
                 } catch (apiError) {
