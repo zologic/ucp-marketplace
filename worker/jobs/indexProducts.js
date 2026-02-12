@@ -81,13 +81,15 @@ async function indexProducts(db) {
 
                 // Fetch products from merchant using dynamic endpoint
                 const productsResponse = await axios.get(productsEndpoint, {
-                    timeout: 30000,
-                    params: {
-                        limit: 1000  // Limit per request
-                    }
+                    timeout: 30000
+                    // Note: Some UCP implementations don't accept pagination params
+                    // The endpoint should return all available products by default
                 });
 
-                const products = productsResponse.data.products || [];
+                // Handle different response formats:
+                // - WooCommerce UCP: { data: [...] }
+                // - Standard UCP: { products: [...] }
+                const products = productsResponse.data.data || productsResponse.data.products || [];
 
                 // Upsert products into database with signing_status = 'pending'
                 for (const product of products) {
@@ -127,21 +129,47 @@ async function indexProducts(db) {
                         }
 
                         // CRITICAL: Determine if price is in cents or currency units
-                        // WooCommerce sends "price" in currency units (10.00 = ten euros)
-                        // UCP spec requires "price_cents" in cents (1000 = ten euros)
+                        // WooCommerce UCP sends price.amount in cents (1000 = ten euros)
+                        // Legacy formats may send price_cents or price in different formats
                         let priceCents;
 
-                        if (product.price_cents !== undefined) {
-                            // If price_cents exists but looks like currency units, convert
-                            // Heuristic: if < 100, it's likely currency units (e.g., 10 EUR)
+                        if (product.price && typeof product.price === 'object' && product.price.amount !== undefined) {
+                            // WooCommerce UCP format: { price: { amount: 1000, currency: "EUR" } }
+                            priceCents = product.price.amount;
+                        } else if (product.price_cents !== undefined) {
+                            // Legacy format with price_cents
                             priceCents = product.price_cents < 100
                                 ? Math.round(product.price_cents * 100)
                                 : product.price_cents;
                         } else if (product.price !== undefined) {
-                            // WooCommerce sends "price" in currency units - convert to cents
+                            // Legacy format with price in currency units
                             priceCents = Math.round(parseFloat(product.price) * 100);
                         } else {
                             priceCents = 0;
+                        }
+
+                        // Extract image URL (handle both formats)
+                        let imageUrl = null;
+                        if (product.images && Array.isArray(product.images) && product.images[0]) {
+                            imageUrl = product.images[0].url;
+                        } else if (product.image_url) {
+                            imageUrl = product.image_url;
+                        }
+
+                        // Extract stock status (handle both formats)
+                        let stockStatus = 'in_stock';
+                        if (product.in_stock !== undefined) {
+                            stockStatus = product.in_stock ? 'in_stock' : 'out_of_stock';
+                        } else if (product.stock_status) {
+                            stockStatus = product.stock_status;
+                        }
+
+                        // Extract currency (handle both formats)
+                        let currency = 'EUR';
+                        if (product.price && typeof product.price === 'object' && product.price.currency) {
+                            currency = product.price.currency;
+                        } else if (product.currency) {
+                            currency = product.currency;
                         }
 
                         await db.query(`
@@ -178,11 +206,11 @@ async function indexProducts(db) {
                             JSON.stringify(variations),
                             hasVariations,
                             priceCents,
-                            product.currency || 'EUR',
+                            currency,
                             product.category || null,
                             product.brand || null,
-                            product.image_url || null,
-                            product.stock_status || 'in_stock'
+                            imageUrl,
+                            stockStatus
                         ]);
 
                         productsIndexed++;
