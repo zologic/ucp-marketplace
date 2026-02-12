@@ -114,10 +114,38 @@ function parseManifest(manifestJson) {
 
 /**
  * Extract and validate business profile from manifest
+ * For UCP 2026 format, business_profile is optional and can be inferred from domain
  */
 function extractBusinessProfile(manifest) {
+  // UCP 2026 format: business_profile is optional
   if (!manifest.business_profile || typeof manifest.business_profile !== 'object') {
-    throw new UcpParseError('Missing or invalid business_profile object', 'business_profile');
+    // Try to extract domain from services or use placeholder
+    let businessName = 'Unknown Business';
+    let businessWebsite = '';
+
+    // Try to extract from service base URL in UCP 2026 format
+    if (manifest.ucp && manifest.ucp.services) {
+      const shoppingServices = manifest.ucp.services['dev.ucp.shopping'];
+      if (shoppingServices && Array.isArray(shoppingServices) && shoppingServices[0]) {
+        const endpoint = shoppingServices[0].endpoint;
+        if (endpoint) {
+          try {
+            const url = new URL(endpoint);
+            businessName = url.hostname;
+            businessWebsite = `https://${url.hostname}`;
+          } catch (e) {
+            // Ignore URL parsing errors
+          }
+        }
+      }
+    }
+
+    // Return minimal profile for UCP 2026
+    return {
+      name: businessName,
+      description: '',
+      website: businessWebsite
+    };
   }
 
   const profile = manifest.business_profile;
@@ -162,29 +190,40 @@ function extractBusinessProfile(manifest) {
  * Extract and validate service base URL from manifest
  */
 function extractServiceBaseUrl(manifest) {
-  if (!manifest.services) {
-    throw new UcpParseError('Missing services', 'services');
-  }
-
   let baseUrl;
 
-  // Handle both old format (services.base_url) and new format (services[].transports[].base_url)
-  if (typeof manifest.services === 'object' && manifest.services.base_url) {
-    // Old format: services.base_url
-    baseUrl = manifest.services.base_url;
-  } else if (Array.isArray(manifest.services)) {
-    // New format: services[].transports[].base_url
-    const shoppingService = manifest.services.find(s => s.name === 'shopping');
-    if (shoppingService && Array.isArray(shoppingService.transports)) {
-      const restTransport = shoppingService.transports.find(t => t.type === 'rest');
-      if (restTransport && restTransport.base_url) {
-        baseUrl = restTransport.base_url;
+  // Try UCP 2026 format first: manifest.ucp.services['dev.ucp.shopping']
+  if (manifest.ucp && manifest.ucp.services) {
+    const shoppingServices = manifest.ucp.services['dev.ucp.shopping'];
+    if (shoppingServices && Array.isArray(shoppingServices)) {
+      // Find REST transport for base URL
+      const restTransport = shoppingServices.find(s => s.transport === 'rest');
+      if (restTransport && restTransport.endpoint) {
+        baseUrl = restTransport.endpoint;
+      }
+    }
+  }
+
+  // Fall back to old formats if not found
+  if (!baseUrl && manifest.services) {
+    // Handle both old format (services.base_url) and legacy new format (services[].transports[].base_url)
+    if (typeof manifest.services === 'object' && manifest.services.base_url) {
+      // Old format: services.base_url
+      baseUrl = manifest.services.base_url;
+    } else if (Array.isArray(manifest.services)) {
+      // Legacy new format: services[].transports[].base_url
+      const shoppingService = manifest.services.find(s => s.name === 'shopping');
+      if (shoppingService && Array.isArray(shoppingService.transports)) {
+        const restTransport = shoppingService.transports.find(t => t.type === 'rest');
+        if (restTransport && restTransport.base_url) {
+          baseUrl = restTransport.base_url;
+        }
       }
     }
   }
 
   if (!baseUrl || typeof baseUrl !== 'string') {
-    throw new UcpParseError('Missing or invalid service base_url. Expected services.base_url or services[].transports[].base_url', 'services.base_url');
+    throw new UcpParseError('Missing or invalid service base_url. Expected services.base_url, services[].transports[].base_url, or ucp.services[].endpoint', 'services.base_url');
   }
 
   if (!isValidUrl(baseUrl)) {
