@@ -328,21 +328,63 @@ router.post('/checkout', async (req, res) => {
         // Generate referral ID
         const referralId = crypto.randomUUID();
 
-        // Check merchant's UCP manifest for embedded checkout support
+        // Check merchant's UCP manifest for checkout creation and embedded checkout support
         let supportsEmbeddedCheckout = false;
         let checkoutUrl = `https://${merchant.domain}/checkout?ref=${referralId}`;
 
-        if (merchant.ucp_manifest && merchant.ucp_manifest.capabilities) {
-            const embeddedCheckoutCap = merchant.ucp_manifest.capabilities.find(
-                cap => cap.name === 'dev.ucp.shopping.embedded_checkout' && cap.supported === true
+        if (merchant.ucp_manifest && merchant.service_base_url) {
+            // Look for checkout creation service
+            const checkoutService = merchant.ucp_manifest.ucp?.services?.['dev.ucp.shopping']?.find(
+                svc => svc.name === 'create_checkout_session'
             );
 
-            if (embeddedCheckoutCap && embeddedCheckoutCap.endpoint) {
-                supportsEmbeddedCheckout = true;
-                // Use the merchant's embedded checkout endpoint with session ID as path parameter
-                // Remove trailing slash if present, then append session ID
-                const endpointBase = embeddedCheckoutCap.endpoint.replace(/\/$/, '');
-                checkoutUrl = `${endpointBase}/${referralId}`;
+            if (checkoutService && checkoutService.endpoint) {
+                try {
+                    // Call merchant's UCP API to create checkout session
+                    const checkoutResponse = await axios.post(checkoutService.endpoint, {
+                        items: [{
+                            product_id: product.merchant_product_id,
+                            quantity: quantity,
+                            variations: selected_variations
+                        }],
+                        referral_id: referralId,
+                        return_url: `${process.env.APP_URL || 'https://bizform.app'}/checkout/complete`,
+                        cancel_url: `${process.env.APP_URL || 'https://bizform.app'}/checkout/cancel`
+                    }, {
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 10000
+                    });
+
+                    if (checkoutResponse.data && checkoutResponse.data.checkout_url) {
+                        checkoutUrl = checkoutResponse.data.checkout_url;
+
+                        // Check if merchant supports embedded checkout
+                        const embeddedCheckoutCap = merchant.ucp_manifest.capabilities?.find(
+                            cap => cap.name === 'dev.ucp.shopping.embedded_checkout' && cap.supported === true
+                        );
+
+                        if (embeddedCheckoutCap) {
+                            supportsEmbeddedCheckout = true;
+                        }
+                    }
+                } catch (apiError) {
+                    console.error('Failed to create merchant checkout session:', apiError.message);
+                    // Fall back to direct URL
+                    checkoutUrl = `https://${merchant.domain}/checkout?ref=${referralId}`;
+                }
+            } else {
+                // No checkout creation service, check for embedded checkout capability
+                const embeddedCheckoutCap = merchant.ucp_manifest.capabilities?.find(
+                    cap => cap.name === 'dev.ucp.shopping.embedded_checkout' && cap.supported === true
+                );
+
+                if (embeddedCheckoutCap && embeddedCheckoutCap.endpoint) {
+                    supportsEmbeddedCheckout = true;
+                    const endpointBase = embeddedCheckoutCap.endpoint.replace(/\/$/, '');
+                    checkoutUrl = `${endpointBase}/${referralId}`;
+                }
             }
         }
 
