@@ -197,6 +197,9 @@ router.post('/checkout', async (req, res) => {
         }
 
         const product = productResult.rows[0];
+        console.log(`[Checkout] Product fields:`, Object.keys(product));
+        console.log(`[Checkout] Product merchant_product_id:`, product.merchant_product_id);
+        console.log(`[Checkout] Product permalink:`, product.permalink);
 
         if (product.stock_status !== 'in_stock') {
             return res.status(400).json({ error: 'Product out of stock' });
@@ -350,7 +353,7 @@ router.post('/checkout', async (req, res) => {
                     console.log(`[Checkout] Calling merchant API: ${checkoutService.endpoint}/checkout`);
                     const requestBody = {
                         line_items: [{
-                            item: { id: String(product.merchant_product_id) },
+                            item: { id: String(product.external_id) },
                             quantity: Number(quantity)
                         }]
                     };
