@@ -388,6 +388,66 @@ router.post('/merchants/:id/recrawl', requireAuth, async (req, res) => {
         // Insert/update products
         for (const product of products) {
             try {
+                // If product type is 'variable', fetch full product details including variations
+                let productData = product;
+                let variations = [];
+                let hasVariations = false;
+
+                if (product.type === 'variable') {
+                    try {
+                        const detailsUrl = `${merchant.service_base_url}/products/${product.id}`;
+                        console.log(`[Recrawl] Fetching variable product details from ${detailsUrl}`);
+                        const detailsResponse = await axios.get(detailsUrl, { timeout: 10000 });
+                        productData = detailsResponse.data;
+
+                        // Parse variations if present
+                        if (productData.variations && Array.isArray(productData.variations) && productData.variations.length > 0) {
+                            // Transform UCP 2026 variations format
+                            const attributeGroups = {};
+                            const basePrice = product.price?.amount || 0;
+
+                            for (const variation of productData.variations) {
+                                if (!variation.attributes) continue;
+
+                                const variationPrice = variation.price?.amount || basePrice;
+                                const priceModifier = variationPrice - basePrice;
+
+                                // Extract each attribute
+                                for (const [attrKey, attrValue] of Object.entries(variation.attributes)) {
+                                    // Remove "attribute_" prefix if present
+                                    const cleanAttrKey = attrKey.replace(/^attribute_/, '');
+
+                                    if (!attributeGroups[cleanAttrKey]) {
+                                        attributeGroups[cleanAttrKey] = {
+                                            attribute: cleanAttrKey.charAt(0).toUpperCase() + cleanAttrKey.slice(1),
+                                            options: []
+                                        };
+                                    }
+
+                                    // Check if this option already exists
+                                    const existingOption = attributeGroups[cleanAttrKey].options.find(opt => opt.value === attrValue);
+
+                                    if (!existingOption) {
+                                        attributeGroups[cleanAttrKey].options.push({
+                                            value: String(attrValue),
+                                            available: variation.in_stock !== false,
+                                            price_modifier_cents: priceModifier,
+                                            variation_id: String(variation.id)
+                                        });
+                                    }
+                                }
+                            }
+
+                            variations = Object.values(attributeGroups);
+                            hasVariations = variations.length > 0;
+                            console.log(`[Recrawl] Product ${product.id} has ${variations.length} variation attributes`);
+                        }
+                    } catch (detailsError) {
+                        console.error(`[Recrawl] Failed to fetch details for variable product ${product.id}:`, detailsError.message);
+                        // Continue with basic product data from list
+                    }
+                }
+
                 // Check if product already exists
                 const existingProduct = await req.app.locals.db.query(
                     'SELECT id FROM products WHERE merchant_id = $1 AND external_id = $2',
@@ -407,17 +467,21 @@ router.post('/merchants/:id/recrawl', requireAuth, async (req, res) => {
                             brand = $6,
                             image_url = $7,
                             stock_status = $8,
+                            has_variations = $9,
+                            variations = $10,
                             indexed_at = NOW()
-                        WHERE merchant_id = $9 AND external_id = $10
+                        WHERE merchant_id = $11 AND external_id = $12
                     `, [
-                        product.name || 'Untitled Product',
-                        product.description || '',
-                        product.price?.amount || 0,
-                        product.price?.currency || 'USD',
-                        product.category || null,
-                        product.brand || null,
-                        product.images?.[0]?.url || product.image_url || null,
-                        product.availability || 'in_stock',
+                        productData.name || 'Untitled Product',
+                        productData.description || '',
+                        productData.price?.amount || 0,
+                        productData.price?.currency || 'USD',
+                        productData.category || null,
+                        productData.brand || null,
+                        productData.images?.[0]?.url || productData.image_url || null,
+                        productData.in_stock !== false ? 'in_stock' : 'out_of_stock',
+                        hasVariations,
+                        JSON.stringify(variations),
                         merchantId,
                         product.id
                     ]);
@@ -427,20 +491,23 @@ router.post('/merchants/:id/recrawl', requireAuth, async (req, res) => {
                     await req.app.locals.db.query(`
                         INSERT INTO products (
                             merchant_id, tenant_id, external_id, name, description,
-                            price_cents, currency, category, brand, image_url, stock_status, indexed_at
-                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+                            price_cents, currency, category, brand, image_url, stock_status,
+                            has_variations, variations, indexed_at
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
                     `, [
                         merchantId,
                         merchant.tenant_id,
                         product.id,
-                        product.name || 'Untitled Product',
-                        product.description || '',
-                        product.price?.amount || 0,
-                        product.price?.currency || 'USD',
-                        product.category || null,
-                        product.brand || null,
-                        product.images?.[0]?.url || product.image_url || null,
-                        product.availability || 'in_stock'
+                        productData.name || 'Untitled Product',
+                        productData.description || '',
+                        productData.price?.amount || 0,
+                        productData.price?.currency || 'USD',
+                        productData.category || null,
+                        productData.brand || null,
+                        productData.images?.[0]?.url || productData.image_url || null,
+                        productData.in_stock !== false ? 'in_stock' : 'out_of_stock',
+                        hasVariations,
+                        JSON.stringify(variations)
                     ]);
                     insertedCount++;
                 }
