@@ -8,11 +8,14 @@ const {
 const express = require('express');
 const { Pool } = require('pg');
 const axios = require('axios');
+const redis = require('redis');
 
 // Import tools
 const searchProductsTool = require('./tools/search_products.js');
 const createCheckoutTool = require('./tools/create_checkout.js');
 const getMerchantInfoTool = require('./tools/get_merchant_info.js');
+const getRecommendationsTool = require('./tools/get_recommendations.js');
+const manageCartTool = require('./tools/manage_cart.js');
 
 // Import enforcement functions
 const { isMerchantEligible } = require('./enforcement/payment_check.js');
@@ -26,6 +29,24 @@ const db = new Pool({
     connectionString: process.env.DATABASE_URL,
     max: 10,
     idleTimeoutMillis: 30000
+});
+
+// Redis client for cart management
+const redisClient = redis.createClient({
+    url: process.env.REDIS_URL
+});
+
+redisClient.on('error', (err) => {
+    console.error('Redis error:', err);
+});
+
+redisClient.on('connect', () => {
+    console.log('Redis connected');
+});
+
+// Connect to Redis
+redisClient.connect().catch(err => {
+    console.error('Redis connection failed:', err);
 });
 
 // In-memory merchant registry cache
@@ -143,6 +164,16 @@ mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
                 name: createCheckoutTool.name,
                 description: createCheckoutTool.description,
                 inputSchema: createCheckoutTool.inputSchema
+            },
+            {
+                name: getRecommendationsTool.name,
+                description: getRecommendationsTool.description,
+                inputSchema: getRecommendationsTool.inputSchema
+            },
+            {
+                name: manageCartTool.name,
+                description: manageCartTool.description,
+                inputSchema: manageCartTool.inputSchema
             }
         ]
     };
@@ -177,6 +208,14 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
                 }
 
                 result = await createCheckoutTool.execute(args, db);
+                break;
+
+            case 'get_recommendations':
+                result = await getRecommendationsTool.execute(args, { db, merchantRegistry });
+                break;
+
+            case 'manage_cart':
+                result = await manageCartTool.execute(args, { db, redis: redisClient });
                 break;
 
             default:

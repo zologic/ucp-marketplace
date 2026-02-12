@@ -27,7 +27,9 @@
     "tweetnacl-util": "^0.15.1",
     "stripe": "^17.3.1",
     "nodemailer": "^6.9.7",
-    "@noble/ed25519": "^2.0.0"
+    "@noble/ed25519": "^2.0.0",
+    "graphql": "^16.8.1",
+    "express-graphql": "^0.12.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

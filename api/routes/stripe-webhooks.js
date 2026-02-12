@@ -12,18 +12,7 @@ const stripe = process.env.STRIPE_SECRET_KEY
     ? require('stripe')(process.env.STRIPE_SECRET_KEY)
     : null;
 
-const nodemailer = require('nodemailer');
-
-// Email configuration for admin notifications
-const mailTransport = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: process.env.SMTP_PORT || 587,
-    secure: process.env.SMTP_PORT == 465, // true for 465, false for other ports
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-    }
-});
+const { sendEmail } = require('../services/emailService');
 
 // POST /api/webhooks/stripe - Stripe webhook endpoint
 // NOTE: This route must use express.raw() middleware (configured in server.js)
@@ -149,32 +138,31 @@ async function handlePaymentFailed(stripeInvoice, db) {
             ['overdue', invoice.id]
         );
 
-        // Send admin notification email
-        try {
-            await mailTransport.sendMail({
-                from: process.env.SMTP_FROM || 'noreply@shopucp.eu',
-                to: process.env.ADMIN_EMAIL || 'admin@shopucp.eu',
-                subject: `Payment Failed: ${invoice.invoice_number}`,
-                html: `
-                    <h2>Payment Failed</h2>
-                    <p><strong>Merchant:</strong> ${invoice.domain}</p>
-                    <p><strong>Invoice:</strong> ${invoice.invoice_number}</p>
-                    <p><strong>Amount:</strong> €${(invoice.total_cents / 100).toFixed(2)}</p>
-                    <p><strong>Stripe Invoice:</strong> <a href="https://dashboard.stripe.com/invoices/${stripeInvoice.id}">${stripeInvoice.id}</a></p>
-                    <hr>
-                    <p style="color: #d32f2f;"><strong>Action required:</strong> Review and contact merchant.</p>
-                    <p style="color: #666; font-size: 12px;">
-                        The merchant's payment method was declined.
-                        Consider suspending the merchant if payment is not received within the grace period.
-                    </p>
-                `
-            });
+        // Update merchant billing status to overdue
+        await db.query(
+            'UPDATE merchant_billing SET status = $1 WHERE merchant_id = $2',
+            ['overdue', invoice.merchant_id]
+        );
 
-            console.log(`[Stripe Webhook] ✓ Admin notified of failed payment for ${invoice.invoice_number}`);
-        } catch (emailError) {
-            console.error('[Stripe Webhook] Failed to send admin notification email:', emailError.message);
-            // Don't throw - email failure shouldn't block webhook processing
+        // Send notification to merchant
+        const contactResult = await db.query(
+            'SELECT email FROM merchant_contacts WHERE merchant_id = $1 AND role = $2 LIMIT 1',
+            [invoice.merchant_id, 'billing']
+        );
+
+        if (contactResult.rows.length > 0) {
+            const contactEmail = contactResult.rows[0].email;
+            const retryDate = new Date();
+            retryDate.setDate(retryDate.getDate() + 3); // Retry in 3 days
+
+            await sendEmail(contactEmail, 'payment_failed', {
+                invoice_number: invoice.invoice_number,
+                amount: `${(invoice.total_cents / 100).toFixed(2)} ${invoice.currency}`,
+                retry_date: retryDate.toISOString().split('T')[0]
+            });
         }
+
+        console.log(`[Stripe Webhook] ✓ Invoice ${invoice.invoice_number} marked as overdue and merchant notified`);
 
     } catch (error) {
         console.error('[Stripe Webhook] Payment failed handler error:', error);

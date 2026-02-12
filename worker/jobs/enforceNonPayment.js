@@ -4,6 +4,7 @@
  */
 
 const axios = require('axios');
+const { sendEmail } = require('../../api/services/emailService');
 
 async function enforceNonPayment(db) {
     const startTime = Date.now();
@@ -37,6 +38,15 @@ async function enforceNonPayment(db) {
 
         for (const merchant of overduemerchants) {
             try {
+                // Get outstanding invoice details
+                const invoiceResult = await db.query(`
+                    SELECT invoice_number, total_cents, currency
+                    FROM invoices
+                    WHERE merchant_id = $1 AND status = 'overdue'
+                    ORDER BY due_at ASC
+                    LIMIT 1
+                `, [merchant.merchant_id]);
+
                 // Suspend merchant
                 await db.query(`
                     UPDATE merchants
@@ -50,6 +60,24 @@ async function enforceNonPayment(db) {
                     SET status = 'suspended', updated_at = NOW()
                     WHERE merchant_id = $1
                 `, [merchant.merchant_id]);
+
+                // Send suspension notification email
+                const contactResult = await db.query(
+                    'SELECT email FROM merchant_contacts WHERE merchant_id = $1 AND role = $2 LIMIT 1',
+                    [merchant.merchant_id, 'billing']
+                );
+
+                if (contactResult.rows.length > 0 && invoiceResult.rows.length > 0) {
+                    const contactEmail = contactResult.rows[0].email;
+                    const invoice = invoiceResult.rows[0];
+
+                    await sendEmail(contactEmail, 'merchant_suspended', {
+                        merchant_domain: merchant.domain,
+                        invoice_number: invoice.invoice_number,
+                        amount: `${(invoice.total_cents / 100).toFixed(2)} ${invoice.currency}`,
+                        payment_link: `${process.env.APP_URL}/billing` // Update with actual payment link
+                    });
+                }
 
                 suspendedCount++;
                 console.log(`[enforceNonPayment] ✓ Suspended ${merchant.domain} for non-payment`);
