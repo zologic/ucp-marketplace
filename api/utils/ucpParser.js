@@ -286,12 +286,28 @@ function extractCapabilities(manifest, serviceBaseUrl) {
     'dev.ucp.shopping.products',
     'dev.ucp.shopping.checkout',
     'dev.ucp.shopping.search',
-    'dev.ucp.shopping.webhooks'
+    'dev.ucp.shopping.webhooks',
+    'dev.ucp.shopping.embedded_checkout',
+    'dev.ucp.shopping.checkout.embedded' // UCP 2026 format
   ];
 
   const discoveredCapabilities = standardCapabilities.map(capabilityName => {
     return discoverCapability(manifest.capabilities, capabilityName, serviceBaseUrl);
   });
+
+  // UCP 2026: Check for embedded transport in services
+  const embeddedCheckoutFromServices = extractEmbeddedCheckoutFromServices(manifest);
+  if (embeddedCheckoutFromServices) {
+    // Add or update the embedded checkout capability
+    const existingEmbeddedIndex = discoveredCapabilities.findIndex(
+      cap => cap.name === 'dev.ucp.shopping.embedded_checkout'
+    );
+    if (existingEmbeddedIndex >= 0) {
+      discoveredCapabilities[existingEmbeddedIndex] = embeddedCheckoutFromServices;
+    } else {
+      discoveredCapabilities.push(embeddedCheckoutFromServices);
+    }
+  }
 
   return discoveredCapabilities;
 }
@@ -342,6 +358,44 @@ function discoverCapability(capabilities, capabilityName, serviceBaseUrl) {
     endpoint: fullEndpoint,
     path: capability.path,
     transport: 'rest'
+  };
+}
+
+/**
+ * Extract embedded checkout capability from UCP 2026 services format
+ * @param {Object} manifest - Full UCP manifest
+ * @returns {Object|null} Embedded checkout capability or null if not found
+ */
+function extractEmbeddedCheckoutFromServices(manifest) {
+  // Check for UCP 2026 format: manifest.ucp.services
+  if (!manifest.ucp || !manifest.ucp.services) {
+    return null;
+  }
+
+  const services = manifest.ucp.services;
+
+  // Look for dev.ucp.shopping service
+  const shoppingServices = services['dev.ucp.shopping'];
+  if (!shoppingServices || !Array.isArray(shoppingServices)) {
+    return null;
+  }
+
+  // Find the embedded transport
+  const embeddedTransport = shoppingServices.find(
+    service => service.transport === 'embedded'
+  );
+
+  if (!embeddedTransport || !embeddedTransport.endpoint) {
+    return null;
+  }
+
+  return {
+    name: 'dev.ucp.shopping.embedded_checkout',
+    supported: true,
+    endpoint: embeddedTransport.endpoint,
+    transport: 'embedded',
+    version: embeddedTransport.version || null,
+    schema: embeddedTransport.schema || null
   };
 }
 

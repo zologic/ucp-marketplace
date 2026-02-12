@@ -4,7 +4,7 @@
  */
 
 const axios = require('axios');
-const { parseUcpManifest } = require('/app/utils/ucpParser');
+const { parseManifest } = require('/app/utils/ucpParser');
 const { sendEmail } = require('/app/services/emailService');
 
 async function verifyMerchants(db) {
@@ -44,28 +44,29 @@ async function verifyMerchants(db) {
 
                 const manifest = response.data;
 
-                // Parse and validate manifest using new UCP schema
-                const parseResult = parseUcpManifest(manifest);
-
-                if (!parseResult.isValid) {
-                    throw new Error(parseResult.error);
-                }
+                // Parse and validate manifest using UCP parser
+                const parsed = parseManifest(manifest);
 
                 // Extract parsed data
-                const {
-                    businessName,
-                    businessUrl,
-                    businessDescription,
-                    contactEmail,
-                    serviceBaseUrl,
-                    publicKey,
-                    signingKeyId,
-                    fullManifest
-                } = parseResult.data;
+                const businessName = parsed.businessProfile.name;
+                const businessUrl = parsed.businessProfile.website;
+                const businessDescription = parsed.businessProfile.description;
+                const contactEmail = manifest.business_profile?.contact_email || null;
+                const serviceBaseUrl = parsed.serviceBaseUrl;
+                const publicKey = parsed.publicKey;
+                const signingKeyId = parsed.signingKeyId;
+                const capabilities = parsed.capabilities;
+                const fullManifest = parsed.rawManifest;
 
                 // Update merchant as verified
                 const newStatus = merchant.status === 'pending' ? 'verified' : merchant.status;
                 const wasJustVerified = merchant.status === 'pending';
+
+                // Build full manifest with capabilities for storage
+                const manifestForStorage = {
+                    ...fullManifest,
+                    capabilities: capabilities
+                };
 
                 await db.query(`
                     UPDATE merchants
@@ -91,7 +92,7 @@ async function verifyMerchants(db) {
                     businessDescription,
                     businessUrl,
                     contactEmail,
-                    JSON.stringify(fullManifest),
+                    JSON.stringify(manifestForStorage),
                     newStatus,
                     merchant.id
                 ]);
