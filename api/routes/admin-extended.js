@@ -28,12 +28,12 @@ async function logAuditEvent(db, adminId, action, resourceType, resourceId, deta
 router.get('/admins', requireAuth, requireSuperAdmin, async (req, res) => {
     try {
         const result = await req.app.locals.db.query(`
-            SELECT id, email, role, created_at
+            SELECT id, email, role, status, created_at, last_login
             FROM admins
             ORDER BY created_at DESC
         `);
 
-        res.json({ admins: result.rows });
+        res.json({ users: result.rows });
     } catch (error) {
         console.error('List admins error:', error);
         res.status(500).json({ error: 'Failed to list admins' });
@@ -43,7 +43,7 @@ router.get('/admins', requireAuth, requireSuperAdmin, async (req, res) => {
 // POST /admin/admins - Create admin user (superadmin only)
 router.post('/admins', requireAuth, requireSuperAdmin, async (req, res) => {
     try {
-        const { email, password, role = 'admin' } = req.body;
+        const { email, password, role = 'admin', status = 'active' } = req.body;
 
         if (!email || !password) {
             return res.status(400).json({ error: 'Email and password are required' });
@@ -55,6 +55,10 @@ router.post('/admins', requireAuth, requireSuperAdmin, async (req, res) => {
 
         if (!['admin', 'superadmin'].includes(role)) {
             return res.status(400).json({ error: 'Invalid role' });
+        }
+
+        if (!['active', 'inactive'].includes(status)) {
+            return res.status(400).json({ error: 'Invalid status' });
         }
 
         const normalizedEmail = email.toLowerCase().trim();
@@ -73,15 +77,15 @@ router.post('/admins', requireAuth, requireSuperAdmin, async (req, res) => {
         const passwordHash = await bcrypt.hash(password, 10);
 
         const result = await req.app.locals.db.query(`
-            INSERT INTO admins (email, password_hash, role)
-            VALUES ($1, $2, $3)
-            RETURNING id, email, role, created_at
-        `, [normalizedEmail, passwordHash, role]);
+            INSERT INTO admins (email, password_hash, role, status)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, email, role, status, created_at
+        `, [normalizedEmail, passwordHash, role, status]);
 
         const admin = result.rows[0];
 
         // Log audit event
-        await logAuditEvent(req.app.locals.db, req.admin.id, 'admin_created', 'admin', admin.id, { email: normalizedEmail, role });
+        await logAuditEvent(req.app.locals.db, req.admin.id, 'admin_created', 'admin', admin.id, { email: normalizedEmail, role, status });
 
         res.status(201).json({ admin });
     } catch (error) {
@@ -111,24 +115,51 @@ router.get('/admins/:id', requireAuth, requireSuperAdmin, async (req, res) => {
     }
 });
 
-// PATCH /admin/admins/:id - Update admin role (superadmin only)
+// PATCH /admin/admins/:id - Update admin user (superadmin only)
 router.patch('/admins/:id', requireAuth, requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
-        const { role } = req.body;
+        const { role, status, email } = req.body;
 
-        if (!['admin', 'superadmin'].includes(role)) {
-            return res.status(400).json({ error: 'Invalid role' });
+        // Build update fields dynamically
+        const updates = [];
+        const values = [];
+        let paramIndex = 1;
+
+        if (role) {
+            if (!['admin', 'superadmin'].includes(role)) {
+                return res.status(400).json({ error: 'Invalid role' });
+            }
+            // Cannot change own role
+            if (req.admin.id === id) {
+                return res.status(400).json({ error: 'Cannot change your own role' });
+            }
+            updates.push(`role = $${paramIndex++}`);
+            values.push(role);
         }
 
-        // Cannot change own role
-        if (req.admin.id === id) {
-            return res.status(400).json({ error: 'Cannot change your own role' });
+        if (status) {
+            if (!['active', 'inactive'].includes(status)) {
+                return res.status(400).json({ error: 'Invalid status' });
+            }
+            updates.push(`status = $${paramIndex++}`);
+            values.push(status);
         }
 
+        if (email) {
+            const normalizedEmail = email.toLowerCase().trim();
+            updates.push(`email = $${paramIndex++}`);
+            values.push(normalizedEmail);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No fields to update' });
+        }
+
+        values.push(id);
         const result = await req.app.locals.db.query(
-            'UPDATE admins SET role = $1 WHERE id = $2 RETURNING id, email, role, created_at',
-            [role, id]
+            `UPDATE admins SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING id, email, role, status, created_at`,
+            values
         );
 
         if (result.rows.length === 0) {
@@ -136,7 +167,7 @@ router.patch('/admins/:id', requireAuth, requireSuperAdmin, async (req, res) => 
         }
 
         // Log audit event
-        await logAuditEvent(req.app.locals.db, req.admin.id, 'admin_role_changed', 'admin', id, { new_role: role });
+        await logAuditEvent(req.app.locals.db, req.admin.id, 'admin_updated', 'admin', id, { role, status, email });
 
         res.json({ admin: result.rows[0] });
     } catch (error) {
