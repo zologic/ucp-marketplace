@@ -726,14 +726,11 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
     applied_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- Mark migrations 001-005 as already applied (they're in this base schema)
-INSERT INTO schema_migrations (migration_file) VALUES
-    ('001_add_ucp_business_profile.sql'),
-    ('002_add_product_variations.sql'),
-    ('003_add_mobile_push_tokens.sql'),
-    ('004_add_referral_source.sql'),
-    ('005_structured_categories.sql')
-ON CONFLICT (migration_file) DO NOTHING;
+-- Note: This base schema consolidates migrations 001-005.
+-- Do NOT manually insert them into schema_migrations here, as that causes
+-- race conditions with the migration runner's transaction handling.
+-- The migration runner (migrate.js) will automatically mark this file
+-- (000_base_schema.sql) as applied after execution completes.
 
 -- ============================================================================
 -- Base Schema Complete
