@@ -4,13 +4,15 @@
  */
 
 import { showLoading, hideLoading, renderResults, renderError, clearError } from './ui.js';
+import { showCategorySection } from './categories.js';
 
 /**
- * Handle product search
+ * Handle product search with optional category filter
  * @param {string} query - Search query
  * @param {string} apiBase - API base URL
+ * @param {string|null} categorySlug - Optional category slug to filter by
  */
-export async function handleSearch(query, apiBase) {
+export async function handleSearch(query, apiBase, categorySlug = null) {
     // Trigger pill transition to sticky bottom
     const searchPill = document.querySelector('.search-pill');
     const trustIndicators = document.querySelector('.trust-indicators');
@@ -35,12 +37,17 @@ export async function handleSearch(query, apiBase) {
     clearError();
 
     try {
+        const requestBody = { query };
+        if (categorySlug) {
+            requestBody.filters = { category_slug: categorySlug };
+        }
+
         const response = await fetch(`${apiBase}/search`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ query })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
@@ -55,6 +62,12 @@ export async function handleSearch(query, apiBase) {
 
         const data = await response.json();
         renderResults(data.results || []);
+
+        // Show category section after first search
+        showCategorySection();
+
+        // Emit custom event that search completed
+        window.dispatchEvent(new CustomEvent('searchCompleted'));
     } catch (error) {
         console.error('Search error:', error);
 
@@ -66,4 +79,14 @@ export async function handleSearch(query, apiBase) {
     } finally {
         hideLoading();
     }
+}
+
+/**
+ * Handle search with category filter (convenience wrapper)
+ * @param {string} query - Search query
+ * @param {string} apiBase - API base URL
+ * @param {string|null} categorySlug - Category slug to filter by
+ */
+export async function handleSearchWithCategory(query, apiBase, categorySlug) {
+    return handleSearch(query, apiBase, categorySlug);
 }

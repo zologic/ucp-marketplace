@@ -20,6 +20,8 @@ function Layout({ children }) {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: 'fa-gauge-high' },
     { path: '/merchants', label: 'Merchants', icon: 'fa-shop' },
+    { path: '/categories', label: 'Categories', icon: 'fa-tags' },
+    { path: '/products', label: 'Products', icon: 'fa-box' },
     { path: '/analytics', label: 'Analytics', icon: 'fa-chart-line' },
     { path: '/billing', label: 'Billing', icon: 'fa-file-invoice-dollar' },
     { path: '/tenants', label: 'Tenants', icon: 'fa-building-user' },

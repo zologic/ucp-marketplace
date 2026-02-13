@@ -47,6 +47,13 @@
             <div id="voice-status" class="voice-status hidden"></div>
         </section>
 
+        <!-- Category Chips Section (hidden initially) -->
+        <section id="category-section" class="category-section hidden">
+            <div class="category-chips" id="category-chips">
+                <!-- Categories will be dynamically inserted here -->
+            </div>
+        </section>
+
         <!-- Results Section (hidden initially) -->
         <section id="results-section" class="results-section hidden">
             <div id="results-container" class="results-container"></div>
@@ -61,6 +68,18 @@
         <!-- Error State -->
         <div id="error" class="error hidden"></div>
     </main>
+
+    <!-- Category Bottom Sheet -->
+    <div id="category-bottom-sheet" class="bottom-sheet-overlay hidden">
+        <div class="bottom-sheet-content">
+            <div class="sheet-handle"></div>
+            <h3 class="sheet-title">All Categories</h3>
+            <div id="category-list" class="category-list">
+                <!-- Full category list will be inserted here -->
+            </div>
+        </div>
+    </div>
+    <div id="bottom-sheet-backdrop" class="bottom-sheet-backdrop hidden"></div>
 
     <!-- Footer -->
     <footer class="footer">

@@ -12,6 +12,68 @@ const { rankProducts, getCategoryWeights } = require('../services/ranking');
 // Import onboarding routes
 const onboardRoutes = require('./onboard');
 
+// GET /api/categories - List available categories with product counts
+router.get('/categories', async (req, res) => {
+    try {
+        const tenantId = req.tenant.id;
+
+        // Get active merchants for this tenant
+        const merchantsResult = await req.app.locals.db.query(`
+            SELECT m.id
+            FROM merchants m
+            LEFT JOIN merchant_billing mb ON m.id = mb.merchant_id
+            WHERE m.tenant_id = $1
+              AND m.status = 'active'
+              AND (mb.status != 'suspended' OR m.admin_override = true)
+        `, [tenantId]);
+
+        const merchants = merchantsResult.rows;
+
+        if (merchants.length === 0) {
+            return res.json({ categories: [] });
+        }
+
+        // Aggregate categories with product counts
+        const categoriesResult = await req.app.locals.db.query(`
+            SELECT
+                TRIM(LOWER(p.category)) as category_slug,
+                p.category as category_name,
+                COUNT(DISTINCT p.id) as product_count,
+                COUNT(DISTINCT p.merchant_id) as merchant_count
+            FROM products p
+            JOIN merchants m ON p.merchant_id = m.id
+            WHERE p.tenant_id = $1
+              AND p.merchant_id = ANY($2::uuid[])
+              AND p.category IS NOT NULL
+              AND TRIM(p.category) != ''
+            GROUP BY TRIM(LOWER(p.category)), p.category
+            ORDER BY product_count DESC
+            LIMIT 50
+        `, [tenantId, merchants.map(m => m.id)]);
+
+        // Pick the most common casing for each category
+        const categoryMap = {};
+        categoriesResult.rows.forEach(row => {
+            if (!categoryMap[row.category_slug] ||
+                row.product_count > categoryMap[row.category_slug].product_count) {
+                categoryMap[row.category_slug] = {
+                    slug: row.category_slug,
+                    name: row.category_name,
+                    product_count: parseInt(row.product_count),
+                    merchant_count: parseInt(row.merchant_count)
+                };
+            }
+        });
+
+        const categories = Object.values(categoryMap);
+
+        res.json({ categories });
+    } catch (error) {
+        console.error('[GET /categories] Error:', error);
+        res.status(500).json({ error: 'Failed to fetch categories' });
+    }
+});
+
 // POST /api/search - Search products across active merchants
 router.post('/search', async (req, res) => {
     try {
@@ -75,7 +137,12 @@ router.post('/search', async (req, res) => {
         let paramIndex = 4;
 
         // Apply filters
-        if (intent.category) {
+        // Priority: explicit category_slug filter > intent-extracted category
+        if (filters.category_slug) {
+            searchQuery += ` AND TRIM(LOWER(p.category)) = $${paramIndex}`;
+            queryParams.push(filters.category_slug);
+            paramIndex++;
+        } else if (intent.category) {
             searchQuery += ` AND p.category ILIKE $${paramIndex}`;
             queryParams.push(`%${intent.category}%`);
             paramIndex++;

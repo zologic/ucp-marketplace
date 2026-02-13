@@ -11,6 +11,8 @@ import Tenants from './pages/Tenants.jsx';
 import AdminUsers from './pages/AdminUsers.jsx';
 import AuditLogs from './pages/AuditLogs.jsx';
 import SystemHealth from './pages/SystemHealth.jsx';
+import Categories from './pages/Categories.jsx';
+import Products from './pages/Products.jsx';
 
 function App() {
   return (
@@ -24,6 +26,8 @@ function App() {
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/merchants" element={<Merchants />} />
+                <Route path="/categories" element={<Categories />} />
+                <Route path="/products" element={<Products />} />
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/billing" element={<Billing />} />
                 <Route path="/tenants" element={<Tenants />} />

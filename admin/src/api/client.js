@@ -191,4 +191,42 @@ export const triggerStatsRollup = () => {
   return apiClient.post('/trigger-rollup');
 };
 
+// Categories
+export const getCategories = (params) => {
+  return apiClient.get('/categories', { params });
+};
+
+export const getCategory = (id) => {
+  return apiClient.get(`/categories/${id}`);
+};
+
+export const createCategory = (data) => {
+  return apiClient.post('/categories', data);
+};
+
+export const updateCategory = (id, data) => {
+  return apiClient.put(`/categories/${id}`, data);
+};
+
+export const deleteCategory = (id) => {
+  return apiClient.delete(`/categories/${id}`);
+};
+
+// Products
+export const getProducts = (params) => {
+  return apiClient.get('/products', { params });
+};
+
+export const getProduct = (id) => {
+  return apiClient.get(`/products/${id}`);
+};
+
+export const updateProduct = (id, data) => {
+  return apiClient.put(`/products/${id}`, data);
+};
+
+export const deleteProduct = (id) => {
+  return apiClient.delete(`/products/${id}`);
+};
+
 export default apiClient;
