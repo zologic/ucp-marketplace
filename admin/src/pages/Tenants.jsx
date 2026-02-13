@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Button from '../components/Button.jsx';
 import Input from '../components/Input.jsx';
 import Modal from '../components/Modal.jsx';
+import SlidePanel from '../components/SlidePanel.jsx';
 import Table from '../components/Table.jsx';
 import {
   getTenants,
@@ -337,11 +338,12 @@ function Tenants() {
         </form>
       </Modal>
 
-      {/* Tenant Details Modal */}
-      <Modal
+      {/* Tenant Details SlidePanel */}
+      <SlidePanel
         isOpen={isDetailsModalOpen}
         onClose={() => setIsDetailsModalOpen(false)}
         title="Tenant Details"
+        width="600px"
         footer={
           <>
             <Button variant="outline" onClick={() => setIsDetailsModalOpen(false)}>
@@ -454,7 +456,7 @@ function Tenants() {
             )}
           </div>
         )}
-      </Modal>
+      </SlidePanel>
 
       {/* Edit Tenant Modal */}
       <Modal
