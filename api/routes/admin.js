@@ -1442,40 +1442,71 @@ router.patch('/tenants/:id', requireAuth, async (req, res) => {
 });
 
 // DELETE /admin/tenants/:id - Delete tenant
+
 router.delete('/tenants/:id', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
 
-        console.log('[Delete Tenant] Request from admin:', req.admin?.id, 'role:', req.admin?.role);
+        // Delete all merchants first (cascades to products, etc)
+        await req.app.locals.db.query('DELETE FROM merchants WHERE tenant_id = $1', [id]);
 
-        // Check for merchants
-        const merchantCheck = await req.app.locals.db.query(
-            'SELECT COUNT(*) as count FROM merchants WHERE tenant_id = $1',
-            [id]
-        );
-
-        if (parseInt(merchantCheck.rows[0].count) > 0) {
-            return res.status(400).json({ error: 'Cannot delete tenant with active merchants' });
-        }
-
-        const result = await req.app.locals.db.query(
-            'DELETE FROM tenants WHERE id = $1 RETURNING domain',
-            [id]
-        );
+        // Delete tenant
+        const result = await req.app.locals.db.query('DELETE FROM tenants WHERE id = $1 RETURNING domain', [id]);
 
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Tenant not found' });
         }
 
         // Log audit event
-        await logAuditEvent(req.app.locals.db, req.admin.id, 'tenant_deleted', 'tenant', id, { domain: result.rows[0].domain });
+        if (req.admin?.id) {
+            await logAuditEvent(req.app.locals.db, req.admin.id, 'tenant_deleted', 'tenant', id, { domain: result.rows[0].domain });
+        }
 
         res.json({ success: true });
     } catch (error) {
         console.error('Delete tenant error:', error);
-        res.status(500).json({ error: 'Failed to delete tenant' });
+        res.status(500).json({ error: 'Failed to delete tenant', details: error.message });
     }
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // PATCH /admin/tenants/:id/status - Toggle tenant status
 router.patch('/tenants/:id/status', requireAuth, async (req, res) => {
