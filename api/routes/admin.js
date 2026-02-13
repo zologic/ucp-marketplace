@@ -1447,6 +1447,12 @@ router.delete('/tenants/:id', requireAuth, async (req, res) => {
         const { id } = req.params;
 
         console.log('[Delete Tenant] Request from admin:', req.admin?.id, 'role:', req.admin?.role);
+        console.log('[Delete Tenant] Auth header present:', !!req.headers.authorization);
+
+        if (!req.admin) {
+            console.error('[Delete Tenant] req.admin is undefined after requireAuth!');
+            return res.status(401).json({ error: 'Authentication failed' });
+        }
 
         // Check for merchants
         const merchantCheck = await req.app.locals.db.query(
