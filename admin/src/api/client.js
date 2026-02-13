@@ -233,4 +233,9 @@ export const deleteProduct = (id) => {
   return apiClient.delete(`/products/${id}`);
 };
 
+// System operations
+export const triggerProductIndexing = () => {
+  return apiClient.post('/trigger-index');
+};
+
 export default apiClient;

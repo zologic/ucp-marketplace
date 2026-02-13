@@ -1026,4 +1026,40 @@ router.get('/analytics/overview', requireAuth, async (req, res) => {
     }
 });
 
+// ====================
+// SYSTEM OPERATIONS
+// ====================
+
+// POST /admin/trigger-index - Manually trigger product indexing
+router.post('/trigger-index', requireAuth, async (req, res) => {
+    try {
+        console.log('[admin/trigger-index] Manual product indexing triggered by admin');
+
+        // Import indexProducts function
+        const { indexProducts } = require('../jobs/indexProducts');
+
+        // Run indexing job asynchronously
+        indexProducts(req.app.locals.db)
+            .then(result => {
+                console.log('[admin/trigger-index] Indexing completed:', result);
+            })
+            .catch(error => {
+                console.error('[admin/trigger-index] Indexing failed:', error);
+            });
+
+        // Return immediate response
+        res.json({
+            success: true,
+            message: 'Product indexing started in background'
+        });
+    } catch (error) {
+        console.error('[admin/trigger-index] Failed to trigger indexing:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to trigger product indexing',
+            message: error.message
+        });
+    }
+});
+
 module.exports = router;
