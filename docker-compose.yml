@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   # Caddy reverse proxy for multi-domain routing and automatic SSL
   caddy:
