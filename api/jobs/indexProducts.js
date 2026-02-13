@@ -284,6 +284,22 @@ async function indexProducts(db) {
                 merchantsProcessed++;
                 console.log(`[indexProducts] ✓ ${merchant.domain}: ${productsIndexed} products indexed, ${productsFailed} failed`);
 
+                // Force update search_vector for all products (in case GENERATED column didn't trigger)
+                await db.query(`
+                    UPDATE products
+                    SET search_vector =
+                        setweight(to_tsvector('english', COALESCE(name, '')), 'A') ||
+                        setweight(to_tsvector('english', COALESCE(brand, '')), 'A') ||
+                        setweight(to_tsvector('english', COALESCE(category, '')), 'B') ||
+                        setweight(to_tsvector('english', COALESCE(description_short, '')), 'C') ||
+                        setweight(to_tsvector('english', COALESCE(description_long, '')), 'C') ||
+                        setweight(to_tsvector('english', COALESCE(description, '')), 'C')
+                    WHERE merchant_id = $1
+                      AND (search_vector IS NULL OR indexed_at >= NOW() - INTERVAL '1 minute')
+                `, [merchant.id]);
+
+                console.log(`[indexProducts] Search vectors updated for ${merchant.domain}`);
+
                 // Mark old products as out of stock (not seen in last 7 days)
                 await db.query(`
                     UPDATE products
