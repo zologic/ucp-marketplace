@@ -159,6 +159,10 @@ export const updateTenant = (id, data) => {
   return apiClient.patch(`/tenants/${id}`, data);
 };
 
+export const deleteTenant = (id) => {
+  return apiClient.delete(`/tenants/${id}`);
+};
+
 // Admin Users
 export const getAdminUsers = (params) => {
   return apiClient.get('/admins', { params });
