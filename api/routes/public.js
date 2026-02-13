@@ -222,6 +222,8 @@ router.post('/search', async (req, res) => {
         // Generate filter labels for UI
         const filterLabels = generateFilterLabels(parsed.filters);
 
+        console.log(`[Search] Returning ${topResults.length} results to client`);
+
         res.json({
             results: topResults.map(p => ({
                 id: p.id,
