@@ -25,7 +25,7 @@ async function logAuditEvent(db, adminId, action, resourceType, resourceId, deta
 // ======================
 
 // GET /admin/admins - List admin users (superadmin only)
-router.get('/admins', requireSuperAdmin, async (req, res) => {
+router.get('/admins', requireAuth, requireSuperAdmin, async (req, res) => {
     try {
         const result = await req.app.locals.db.query(`
             SELECT id, email, role, created_at
@@ -41,7 +41,7 @@ router.get('/admins', requireSuperAdmin, async (req, res) => {
 });
 
 // POST /admin/admins - Create admin user (superadmin only)
-router.post('/admins', requireSuperAdmin, async (req, res) => {
+router.post('/admins', requireAuth, requireSuperAdmin, async (req, res) => {
     try {
         const { email, password, role = 'admin' } = req.body;
 
@@ -91,7 +91,7 @@ router.post('/admins', requireSuperAdmin, async (req, res) => {
 });
 
 // GET /admin/admins/:id - Get admin details (superadmin only)
-router.get('/admins/:id', requireSuperAdmin, async (req, res) => {
+router.get('/admins/:id', requireAuth, requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -112,7 +112,7 @@ router.get('/admins/:id', requireSuperAdmin, async (req, res) => {
 });
 
 // PATCH /admin/admins/:id - Update admin role (superadmin only)
-router.patch('/admins/:id', requireSuperAdmin, async (req, res) => {
+router.patch('/admins/:id', requireAuth, requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { role } = req.body;
@@ -146,7 +146,7 @@ router.patch('/admins/:id', requireSuperAdmin, async (req, res) => {
 });
 
 // DELETE /admin/admins/:id - Delete admin (superadmin only)
-router.delete('/admins/:id', requireSuperAdmin, async (req, res) => {
+router.delete('/admins/:id', requireAuth, requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -175,7 +175,7 @@ router.delete('/admins/:id', requireSuperAdmin, async (req, res) => {
 });
 
 // PATCH /admin/admins/:id/password - Change admin password (superadmin only)
-router.patch('/admins/:id/password', requireSuperAdmin, async (req, res) => {
+router.patch('/admins/:id/password', requireAuth, requireSuperAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { password, confirm_password } = req.body;
