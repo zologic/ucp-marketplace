@@ -207,6 +207,16 @@ function SystemHealth() {
             </span>
           </div>
           <div className="card-body">
+            {health?.worker?.error && (
+              <div className="alert alert-danger mb-md" style={{ fontSize: '13px' }}>
+                <strong>Error:</strong> {health.worker.error}
+              </div>
+            )}
+            {health?.worker?.message && (
+              <div className="alert alert-info mb-md" style={{ fontSize: '13px' }}>
+                {health.worker.message}
+              </div>
+            )}
             <div className="mb-sm">
               <span className="text-secondary">Job Queue Depth:</span>
               <span className="font-semibold ml-sm">{health?.worker?.queue_depth || 0}</span>
@@ -218,6 +228,10 @@ function SystemHealth() {
             <div className="mb-sm">
               <span className="text-secondary">Failed Jobs (24h):</span>
               <span className="font-semibold ml-sm text-danger">{health?.worker?.failed_jobs_24h || 0}</span>
+            </div>
+            <div className="mb-sm">
+              <span className="text-secondary">Uptime:</span>
+              <span className="font-semibold ml-sm">{formatUptime(health?.worker?.uptime_seconds)}</span>
             </div>
             <div>
               <span className="text-secondary">Next Crawl Scheduled:</span>
