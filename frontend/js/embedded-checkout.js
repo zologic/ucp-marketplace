@@ -45,13 +45,24 @@ export function showEmbeddedCheckout(checkoutUrl, referralId) {
     iframe.className = 'embedded-checkout-iframe';
     iframe.id = 'embedded-checkout-iframe';
     iframe.src = ecpUrl;
-    iframe.allow = 'payment';
-    // ECP Security: sandbox with required permissions
-    iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox');
-    // ECP Security: credentialless mode (optional, for enhanced security)
-    if ('credentialless' in HTMLIFrameElement.prototype) {
-        iframe.setAttribute('credentialless', 'true');
-    }
+
+    // Payment gateway permissions
+    // Allow: payment APIs, modals, redirects (3DS, PayPal), and top navigation for payment flows
+    iframe.allow = 'payment; publickey-credentials-get';
+
+    // ECP Security: sandbox with required permissions for payment gateways
+    iframe.setAttribute('sandbox',
+        'allow-same-origin ' +           // Required for cookies/session
+        'allow-scripts ' +                // Required for payment scripts
+        'allow-forms ' +                  // Required for form submission
+        'allow-popups ' +                 // Required for 3DS, PayPal popups
+        'allow-popups-to-escape-sandbox ' + // Required for payment redirects
+        'allow-top-navigation-by-user-activation ' + // Required for some payment flows
+        'allow-modals'                    // Required for payment modals
+    );
+
+    // Note: credentialless mode disabled to allow payment gateway cookies and sessions
+    // Payment gateways like Stripe, PayPal require cookies for session management
 
     // Create loading indicator
     const loading = document.createElement('div');
@@ -72,19 +83,14 @@ export function showEmbeddedCheckout(checkoutUrl, referralId) {
     const messageHandler = setupEcpMessageHandler(referralId, iframe, ecpUrl);
     window.addEventListener('message', messageHandler);
 
-    // Handle iframe load - initiate ECP handshake
+    // Handle iframe load - wait for merchant to initiate handshake
     iframe.addEventListener('load', () => {
         loading.style.display = 'none';
         iframe.style.display = 'block';
 
-        // Initiate ECP handshake (ec.ready request)
-        sendEcpRequest(iframe, ecpUrl, 'ec.ready', {
-            delegate: ECP_DELEGATIONS
-        }).then(result => {
-            console.log('[ECP] Handshake successful:', result);
-        }).catch(error => {
-            console.error('[ECP] Handshake failed:', error);
-        });
+        // Per UCP 2026 spec: Embedded Checkout (merchant) initiates handshake
+        // We wait for the merchant to send ec.ready, then respond
+        console.log('[ECP] Iframe loaded, waiting for merchant ec.ready...');
     });
 
     // Handle close button
@@ -217,6 +223,13 @@ function handleEcpNotificationOrRequest(message, iframe, targetOrigin, referralI
     console.log(`[ECP] Received ${id ? 'request' : 'notification'}: ${method}`, params);
 
     switch (method) {
+        case 'ec.ready':
+            // Handshake: Merchant signals readiness
+            if (id) {
+                handleEcpReady(params, id, iframe, targetOrigin, referralId);
+            }
+            break;
+
         case 'ec.start':
             // Lifecycle: Checkout started
             handleEcpStart(params);
@@ -263,6 +276,30 @@ function handleEcpNotificationOrRequest(message, iframe, targetOrigin, referralI
                 sendEcpError(iframe, targetOrigin, id, -32601, 'Method not found');
             }
     }
+}
+
+/**
+ * Handle ec.ready request (handshake from merchant)
+ * @param {Object} params - Ready parameters containing delegate array
+ * @param {string} id - Request ID
+ * @param {HTMLIFrameElement} iframe - Target iframe
+ * @param {string} targetOrigin - Target origin for postMessage
+ * @param {string} referralId - Referral tracking ID
+ */
+function handleEcpReady(params, id, iframe, targetOrigin, referralId) {
+    console.log('[ECP] Handshake received from merchant:', params);
+
+    // Per UCP 2026 spec: Respond to ec.ready with result containing
+    // optional upgrade and checkout objects
+    const response = {
+        // No upgrade needed (we're not using MessagePort)
+        // No checkout state to inject (merchant already has session)
+    };
+
+    // Send success response
+    sendEcpResponse(iframe, targetOrigin, id, response);
+
+    console.log('[ECP] Handshake successful - merchant is ready with delegations:', params.delegate);
 }
 
 /**
