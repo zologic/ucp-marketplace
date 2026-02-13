@@ -1,5 +1,17 @@
 #!/bin/bash
 ################################################################################
+
+# Get database configuration from environment or defaults
+POSTGRES_USER=${POSTGRES_USER:-postgres}
+POSTGRES_DB=${POSTGRES_DB:-ucpready}
+
+# Load from .env if it exists
+if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+fi
+
 # Deploy Migration 002: Product Variations
 # Purpose: Safe deployment script for production environment
 ################################################################################
@@ -21,7 +33,7 @@ echo "=========================================${NC}\n"
 echo -e "${YELLOW}[1/5] Verifying backup...${NC}"
 if [ ! -f "backup.sql" ]; then
     echo -e "${RED}✗ backup.sql not found!${NC}"
-    echo "Please run: docker compose exec postgres pg_dump -U postgres ucpready > backup.sql"
+    echo "Please run: docker compose exec postgres pg_dump -U "$POSTGRES_USER" ucpready > backup.sql"
     exit 1
 fi
 
@@ -37,20 +49,20 @@ echo -e "${GREEN}✓ Backup verified ($(numfmt --to=iec $BACKUP_SIZE 2>/dev/null
 echo -e "${YELLOW}[2/5] Applying migration...${NC}"
 
 # Use -T flag to avoid TTY error
-cat database/migrations/002_add_product_variations.sql | docker compose exec -T postgres psql -U postgres -d ucpready
+cat database/migrations/002_add_product_variations.sql | docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Migration applied successfully${NC}\n"
 else
     echo -e "${RED}✗ Migration failed!${NC}"
-    echo "To rollback: cat backup.sql | docker compose exec -T postgres psql -U postgres ucpready"
+    echo "To rollback: cat backup.sql | docker compose exec -T postgres psql -U "$POSTGRES_USER" ucpready"
     exit 1
 fi
 
 # Step 3: Verify new columns
 echo -e "${YELLOW}[3/5] Verifying database schema...${NC}"
 
-VERIFY_RESULT=$(docker compose exec -T postgres psql -U postgres -d ucpready -c "
+VERIFY_RESULT=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
     SELECT column_name
     FROM information_schema.columns
     WHERE table_name = 'products'
@@ -72,7 +84,7 @@ fi
 
 # Verify indexes
 echo -e "\n${YELLOW}Verifying indexes...${NC}"
-INDEXES=$(docker compose exec -T postgres psql -U postgres -d ucpready -c "
+INDEXES=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
     SELECT indexname
     FROM pg_indexes
     WHERE tablename = 'products'
@@ -148,5 +160,5 @@ echo "  3. Check search performance in database"
 echo "  4. Test in browser: search for products"
 echo ""
 echo "Rollback (if needed):"
-echo "  cat backup.sql | docker compose exec -T postgres psql -U postgres ucpready"
+echo "  cat backup.sql | docker compose exec -T postgres psql -U "$POSTGRES_USER" ucpready"
 echo ""

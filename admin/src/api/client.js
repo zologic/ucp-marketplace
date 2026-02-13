@@ -129,21 +129,21 @@ export const exportAnalytics = (params) => {
 
 // Billing
 export const getBillingInvoices = (params) => {
-  return apiClient.get('/billing/invoices', { params });
+  return apiClient.get('/invoices', { params });
 };
 
 export const getInvoicePdf = (id) => {
-  return apiClient.get(`/billing/invoices/${id}/pdf`, {
+  return apiClient.get(`/invoices/${id}/pdf`, {
     responseType: 'blob'
   });
 };
 
 export const markInvoicePaid = (id) => {
-  return apiClient.post(`/billing/invoices/${id}/mark-paid`);
+  return apiClient.post(`/invoices/${id}/mark-paid`);
 };
 
 export const sendInvoiceReminder = (id) => {
-  return apiClient.post(`/billing/invoices/${id}/send-reminder`);
+  return apiClient.post(`/invoices/${id}/send-reminder`);
 };
 
 // Tenants

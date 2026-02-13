@@ -1,6 +1,18 @@
 #!/bin/bash
 # Diagnostic script for admin-ui issues
 
+# Get database configuration from environment or defaults
+POSTGRES_USER=${POSTGRES_USER:-postgres}
+POSTGRES_DB=${POSTGRES_DB:-ucpready}
+
+# Load from .env if it exists
+if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+fi
+
+
 echo "============================================"
 echo "Admin Dashboard Diagnostics"
 echo "============================================"

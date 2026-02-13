@@ -5,6 +5,10 @@
 echo "=== Create Admin User ==="
 echo ""
 
+# Get database configuration from environment or defaults
+POSTGRES_USER=${POSTGRES_USER:-postgres}
+POSTGRES_DB=${POSTGRES_DB:-ucpready}
+
 # Get admin email
 read -p "Admin email: " ADMIN_EMAIL
 
@@ -27,7 +31,7 @@ if [ ${#ADMIN_PASSWORD} -lt 12 ]; then
 fi
 
 echo ""
-echo "Creating admin user..."
+echo "Creating admin user in database: $POSTGRES_DB..."
 
 # Generate bcrypt hash
 ADMIN_PASSWORD_HASH=$(docker compose run --rm -T api node -e "console.log(require('bcryptjs').hashSync('${ADMIN_PASSWORD}', 10))" 2>/dev/null | tail -1)
@@ -41,7 +45,7 @@ fi
 POSTGRES_PASSWORD=$(docker compose exec -T postgres printenv POSTGRES_PASSWORD)
 
 # Insert admin user
-RESULT=$(docker compose exec -T postgres psql -U postgres -d ucpready -t -A << EOF 2>&1
+RESULT=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -A << EOF 2>&1
 INSERT INTO admins (email, password_hash, role)
 VALUES ('${ADMIN_EMAIL}', '${ADMIN_PASSWORD_HASH}', 'superadmin')
 ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash
