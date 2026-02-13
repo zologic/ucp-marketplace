@@ -523,7 +523,45 @@ router.post('/merchants/:id/recrawl', requireAuth, async (req, res) => {
             [merchantId]
         );
 
-        console.log(`[Recrawl] Complete: ${insertedCount} inserted, ${updatedCount} updated, ${errorCount} errors`);
+        // Auto-create categories from products
+        await req.app.locals.db.query(`
+            INSERT INTO categories (tenant_id, name, slug, is_active, display_order)
+            SELECT DISTINCT
+                p.tenant_id,
+                p.category as name,
+                LOWER(REGEXP_REPLACE(p.category, '[^a-z0-9]+', '-', 'gi')) as slug,
+                true as is_active,
+                0 as display_order
+            FROM products p
+            WHERE p.merchant_id = $1
+              AND p.category IS NOT NULL
+              AND p.category != ''
+              AND p.category != 'null'
+            ON CONFLICT (tenant_id, slug) DO NOTHING
+        `, [merchantId]);
+
+        // Auto-link products to categories
+        const linkResult = await req.app.locals.db.query(`
+            INSERT INTO product_categories (product_id, category_id)
+            SELECT DISTINCT
+                p.id as product_id,
+                c.id as category_id
+            FROM products p
+            JOIN categories c ON
+                c.tenant_id = p.tenant_id
+                AND c.slug = LOWER(REGEXP_REPLACE(p.category, '[^a-z0-9]+', '-', 'gi'))
+            WHERE p.merchant_id = $1
+              AND p.category IS NOT NULL
+              AND p.category != ''
+              AND p.category != 'null'
+              AND NOT EXISTS (
+                SELECT 1 FROM product_categories pc
+                WHERE pc.product_id = p.id AND pc.category_id = c.id
+              )
+            RETURNING product_id
+        `, [merchantId]);
+
+        console.log(`[Recrawl] Complete: ${insertedCount} inserted, ${updatedCount} updated, ${errorCount} errors, ${linkResult.rows.length} category links created`);
 
         res.json({
             success: true,
@@ -531,7 +569,8 @@ router.post('/merchants/:id/recrawl', requireAuth, async (req, res) => {
                 total: products.length,
                 inserted: insertedCount,
                 updated: updatedCount,
-                errors: errorCount
+                errors: errorCount,
+                categories_linked: linkResult.rows.length
             },
             indexed_at: new Date().toISOString()
         });
