@@ -193,6 +193,45 @@ async function indexProducts(db) {
                       AND stock_status != 'out_of_stock'
                 `, [merchant.id]);
 
+                // Auto-create categories from products
+                await db.query(`
+                    INSERT INTO categories (tenant_id, name, slug, is_active, display_order)
+                    SELECT DISTINCT
+                        p.tenant_id,
+                        p.category as name,
+                        LOWER(REGEXP_REPLACE(p.category, '[^a-z0-9]+', '-', 'gi')) as slug,
+                        true as is_active,
+                        0 as display_order
+                    FROM products p
+                    WHERE p.merchant_id = $1
+                      AND p.category IS NOT NULL
+                      AND p.category != ''
+                      AND p.category != 'null'
+                    ON CONFLICT (tenant_id, slug) DO NOTHING
+                `, [merchant.id]);
+
+                // Auto-link products to categories
+                await db.query(`
+                    INSERT INTO product_categories (product_id, category_id)
+                    SELECT DISTINCT
+                        p.id as product_id,
+                        c.id as category_id
+                    FROM products p
+                    JOIN categories c ON
+                        c.tenant_id = p.tenant_id
+                        AND c.slug = LOWER(REGEXP_REPLACE(p.category, '[^a-z0-9]+', '-', 'gi'))
+                    WHERE p.merchant_id = $1
+                      AND p.category IS NOT NULL
+                      AND p.category != ''
+                      AND p.category != 'null'
+                      AND NOT EXISTS (
+                        SELECT 1 FROM product_categories pc
+                        WHERE pc.product_id = p.id AND pc.category_id = c.id
+                      )
+                `, [merchant.id]);
+
+                console.log(`[indexProducts] Categories auto-created and linked for ${merchant.domain}`);
+
                 // Log successful attempt
                 await db.query(`
                     UPDATE merchant_index_log
