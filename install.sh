@@ -237,8 +237,8 @@ if [ "$DOMAIN" = "localhost" ]; then
         reverse_proxy api:3000
     }
 
-    # Admin UI routes
-    handle /admin-ui/* {
+    # Admin UI routes - strip /admin-ui prefix before forwarding
+    handle_path /admin-ui/* {
         reverse_proxy admin:80
     }
 
@@ -300,8 +300,8 @@ ${DOMAIN} {
         reverse_proxy api:3000
     }
 
-    # Admin UI routes
-    handle /admin-ui/* {
+    # Admin UI routes - strip /admin-ui prefix before forwarding
+    handle_path /admin-ui/* {
         reverse_proxy admin:80
     }
 
