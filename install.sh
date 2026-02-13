@@ -206,7 +206,7 @@ cat > Caddyfile << EOF
 
     # Admin UI routes
     handle /admin-ui/* {
-        reverse_proxy admin:5173
+        reverse_proxy admin:80
     }
 
     # API routes
