@@ -74,10 +74,8 @@ if [ -f .env ]; then
     echo ""
     if [[ ! $REPLY =~ ^[Nn]$ ]]; then
         echo -e "${GREEN}✓ Using existing .env${NC}"
-        # Load existing env
-        set -a
-        source .env
-        set +a
+        # Load existing env safely
+        export $(grep -v '^#' .env | xargs)
     else
         echo "Creating new configuration..."
         rm .env
@@ -186,10 +184,8 @@ echo ""
 
 echo -e "${YELLOW}[4/8] Configuring reverse proxy...${NC}"
 
-# Load env vars
-set -a
-source .env
-set +a
+# Load env vars safely (only get DOMAIN)
+DOMAIN=$(grep "^DOMAIN=" .env | cut -d'=' -f2-)
 
 cat > Caddyfile << EOF
 # Auto-generated Caddyfile - Do not edit manually
