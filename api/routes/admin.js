@@ -34,12 +34,23 @@ router.post('/login', async (req, res) => {
 
         const admin = result.rows[0];
 
+        // Check if admin is active
+        if (admin.status && admin.status === 'inactive') {
+            return res.status(403).json({ error: 'Account is inactive' });
+        }
+
         // Verify password
         const isValid = await bcrypt.compare(password, admin.password_hash);
 
         if (!isValid) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
+
+        // Update last_login timestamp
+        await req.app.locals.db.query(
+            'UPDATE admins SET last_login = NOW() WHERE id = $1',
+            [admin.id]
+        );
 
         // Generate JWT token
         const token = jwt.sign(
