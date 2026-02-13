@@ -3,9 +3,18 @@
  * Initializes the shopping interface and handles search events
  */
 
-import { handleSearch } from './search.js';
+import { handleSearch, handleSearchWithCategory } from './search.js';
 import { renderError, clearError } from './ui.js';
 import { initVoiceSearch } from './voice-search.js';
+import {
+    fetchCategories,
+    renderCategoryChips,
+    renderCategoryList,
+    showBottomSheet,
+    closeBottomSheet,
+    hideCategorySection,
+    getSelectedCategorySlug
+} from './categories.js';
 
 // Get API base URL from current domain (white-label compatible)
 const API_BASE = window.location.origin + '/api';
@@ -135,6 +144,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Morph button back to Search
         morphButtonToSearch();
 
+        // Hide categories
+        hideCategorySection();
+
         // Fade out results simultaneously (using setTimeout for slight delay)
         setTimeout(() => {
             resultsSection.classList.add('hidden');
@@ -147,6 +159,43 @@ document.addEventListener('DOMContentLoaded', () => {
     // Listen for morphButton event (triggered when results are displayed)
     window.addEventListener('morphButtonToClear', morphButtonToClear);
 
+    // Initialize categories on first search
+    let categoriesInitialized = false;
+    window.addEventListener('searchCompleted', async () => {
+        if (!categoriesInitialized) {
+            categoriesInitialized = true;
+            const categories = await fetchCategories(API_BASE);
+            if (categories.length > 0) {
+                renderCategoryChips(
+                    categories,
+                    (categorySlug) => {
+                        // Re-run search with category filter
+                        const query = searchInput.value.trim();
+                        if (query) {
+                            handleSearchWithCategory(query, API_BASE, categorySlug);
+                        }
+                    },
+                    () => {
+                        // Show bottom sheet with all categories
+                        renderCategoryList(categories, (categorySlug) => {
+                            // Re-run search with category filter
+                            const query = searchInput.value.trim();
+                            if (query) {
+                                handleSearchWithCategory(query, API_BASE, categorySlug);
+                            }
+                        });
+                        showBottomSheet();
+                    }
+                );
+            }
+        }
+    });
+
+    // Close bottom sheet on backdrop click
+    const backdrop = document.getElementById('bottom-sheet-backdrop');
+    if (backdrop) {
+        backdrop.addEventListener('click', closeBottomSheet);
+    }
 
     // Global error handler
     window.addEventListener('error', (e) => {
