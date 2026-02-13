@@ -103,7 +103,10 @@ router.post('/search', async (req, res) => {
 
         const merchants = merchantsResult.rows;
 
+        console.log(`[Search] Tenant: ${tenantId}, Query: "${query}", Merchants: ${merchants.length}`);
+
         if (merchants.length === 0) {
+            console.log('[Search] No active merchants found for tenant');
             return res.json({ results: [], count: 0 });
         }
 
@@ -181,7 +184,19 @@ router.post('/search', async (req, res) => {
         // Fetch more results for ranking (50 instead of 20)
         searchQuery += ` LIMIT 50`;
 
+        console.log(`[Search] Query params:`, queryParams);
+
+        // Debug: Check total products for this tenant and merchants
+        const debugResult = await req.app.locals.db.query(`
+            SELECT COUNT(*) as total,
+                   COUNT(CASE WHEN search_vector IS NOT NULL THEN 1 END) as with_vector
+            FROM products
+            WHERE tenant_id = $1 AND merchant_id = ANY($2::uuid[])
+        `, [tenantId, merchants.map(m => m.id)]);
+        console.log(`[Search] Total products for tenant: ${debugResult.rows[0].total}, with search_vector: ${debugResult.rows[0].with_vector}`);
+
         const productsResult = await req.app.locals.db.query(searchQuery, queryParams);
+        console.log(`[Search] Found ${productsResult.rows.length} products matching query`);
 
         // Apply production-grade ranking
         const categoryWeights = getCategoryWeights(intent.category);
