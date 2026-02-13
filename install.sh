@@ -99,6 +99,9 @@ if [ ! -f .env ]; then
     read -p "Database name [ucpready]: " POSTGRES_DB
     POSTGRES_DB=${POSTGRES_DB:-ucpready}
 
+    # Database user (always postgres for Docker)
+    POSTGRES_USER=postgres
+
     # Database password
     POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
     echo "Generated secure database password"

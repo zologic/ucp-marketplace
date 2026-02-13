@@ -8,9 +8,17 @@
 
 -- Add unique constraint to prevent duplicate invoices
 -- This ensures that only one invoice can exist for a given merchant and billing period
-ALTER TABLE invoices
-ADD CONSTRAINT IF NOT EXISTS unique_merchant_period
-UNIQUE (merchant_id, period_start, period_end);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'unique_merchant_period'
+    ) THEN
+        ALTER TABLE invoices
+        ADD CONSTRAINT unique_merchant_period
+        UNIQUE (merchant_id, period_start, period_end);
+    END IF;
+END $$;
 
 -- Add comment explaining the constraint
 COMMENT ON CONSTRAINT unique_merchant_period ON invoices IS
