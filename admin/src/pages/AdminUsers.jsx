@@ -31,6 +31,7 @@ function AdminUsers() {
     status: 'active'
   });
   const [formError, setFormError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchUsers = async () => {
     try {
@@ -57,16 +58,22 @@ function AdminUsers() {
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
+
+    if (isSubmitting) return; // Prevent double submission
+
     setFormError('');
+    setIsSubmitting(true);
 
     // Validation
     if (!formData.email || !formData.password) {
       setFormError('Email and password are required');
+      setIsSubmitting(false);
       return;
     }
 
     if (formData.password.length < 8) {
       setFormError('Password must be at least 8 characters');
+      setIsSubmitting(false);
       return;
     }
 
@@ -76,17 +83,24 @@ function AdminUsers() {
       resetForm();
       fetchUsers();
     } catch (err) {
-      setFormError(err.response?.data?.message || 'Failed to create admin user');
+      setFormError(err.response?.data?.error || err.response?.data?.message || 'Failed to create admin user');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleUpdateUser = async (e) => {
     e.preventDefault();
+
+    if (isSubmitting) return; // Prevent double submission
+
     setFormError('');
+    setIsSubmitting(true);
 
     // Validation
     if (!formData.email) {
       setFormError('Email is required');
+      setIsSubmitting(false);
       return;
     }
 
@@ -101,7 +115,9 @@ function AdminUsers() {
       resetForm();
       fetchUsers();
     } catch (err) {
-      setFormError(err.response?.data?.message || 'Failed to update admin user');
+      setFormError(err.response?.data?.error || err.response?.data?.message || 'Failed to update admin user');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -283,11 +299,11 @@ function AdminUsers() {
         title="Add New Admin User"
         footer={
           <>
-            <Button variant="outline" onClick={() => setIsAddModalOpen(false)}>
+            <Button variant="outline" onClick={() => setIsAddModalOpen(false)} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleCreateUser}>
-              Create User
+            <Button variant="primary" onClick={handleCreateUser} disabled={isSubmitting}>
+              {isSubmitting ? 'Creating...' : 'Create User'}
             </Button>
           </>
         }
@@ -359,11 +375,11 @@ function AdminUsers() {
         title="Edit Admin User"
         footer={
           <>
-            <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
+            <Button variant="outline" onClick={() => setIsEditModalOpen(false)} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleUpdateUser}>
-              Update User
+            <Button variant="primary" onClick={handleUpdateUser} disabled={isSubmitting}>
+              {isSubmitting ? 'Updating...' : 'Update User'}
             </Button>
           </>
         }
