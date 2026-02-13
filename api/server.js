@@ -157,7 +157,7 @@ app.listen(PORT, () => {
 if (process.env.RUN_WORKER === 'true') {
     console.log('Starting background worker...');
     try {
-        require('../worker/index.js');
+        require('./worker/index.js');
         global.workerStatus.running = true;
         global.workerStatus.startedAt = new Date();
         console.log('Background worker started successfully');
