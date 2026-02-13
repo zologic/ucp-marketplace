@@ -45,13 +45,24 @@ export function showEmbeddedCheckout(checkoutUrl, referralId) {
     iframe.className = 'embedded-checkout-iframe';
     iframe.id = 'embedded-checkout-iframe';
     iframe.src = ecpUrl;
-    iframe.allow = 'payment';
-    // ECP Security: sandbox with required permissions
-    iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox');
-    // ECP Security: credentialless mode (optional, for enhanced security)
-    if ('credentialless' in HTMLIFrameElement.prototype) {
-        iframe.setAttribute('credentialless', 'true');
-    }
+
+    // Payment gateway permissions
+    // Allow: payment APIs, modals, redirects (3DS, PayPal), and top navigation for payment flows
+    iframe.allow = 'payment; publickey-credentials-get';
+
+    // ECP Security: sandbox with required permissions for payment gateways
+    iframe.setAttribute('sandbox',
+        'allow-same-origin ' +           // Required for cookies/session
+        'allow-scripts ' +                // Required for payment scripts
+        'allow-forms ' +                  // Required for form submission
+        'allow-popups ' +                 // Required for 3DS, PayPal popups
+        'allow-popups-to-escape-sandbox ' + // Required for payment redirects
+        'allow-top-navigation-by-user-activation ' + // Required for some payment flows
+        'allow-modals'                    // Required for payment modals
+    );
+
+    // Note: credentialless mode disabled to allow payment gateway cookies and sessions
+    // Payment gateways like Stripe, PayPal require cookies for session management
 
     // Create loading indicator
     const loading = document.createElement('div');
