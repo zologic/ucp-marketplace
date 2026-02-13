@@ -161,19 +161,24 @@ router.post('/search', async (req, res) => {
             paramIndex++;
         }
 
-        if (intent.max_price_cents) {
+        // Apply price filters (explicit filters override intent)
+        const maxPrice = filters.price_max_cents || intent.max_price_cents;
+        const minPrice = filters.price_min_cents || intent.min_price_cents;
+
+        if (maxPrice) {
             searchQuery += ` AND p.price_cents <= $${paramIndex}`;
-            queryParams.push(intent.max_price_cents);
+            queryParams.push(maxPrice);
             paramIndex++;
         }
 
-        if (intent.min_price_cents) {
+        if (minPrice) {
             searchQuery += ` AND p.price_cents >= $${paramIndex}`;
-            queryParams.push(intent.min_price_cents);
+            queryParams.push(minPrice);
             paramIndex++;
         }
 
-        if (intent.in_stock_only) {
+        // Apply stock filter (explicit filter overrides intent)
+        if (filters.in_stock_only || intent.in_stock_only) {
             searchQuery += ` AND p.stock_status = 'in_stock'`;
         }
 
