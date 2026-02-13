@@ -12,7 +12,8 @@ import {
   activateMerchant,
   recrawlMerchant,
   verifyMerchant,
-  triggerMerchantIndex
+  triggerMerchantIndex,
+  getTenants
 } from '../api/client.js';
 
 function Merchants() {
@@ -21,6 +22,9 @@ function Merchants() {
   const [error, setError] = useState(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
+  // Tenants
+  const [tenants, setTenants] = useState([]);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState('all');
@@ -36,7 +40,8 @@ function Merchants() {
   // Form state
   const [formData, setFormData] = useState({
     domain: '',
-    name: ''
+    name: '',
+    tenant_id: ''
   });
   const [ucpVerifying, setUcpVerifying] = useState(false);
   const [ucpStatus, setUcpStatus] = useState(null); // 'success', 'error', null
@@ -64,8 +69,18 @@ function Merchants() {
     }
   };
 
+  const fetchTenants = async () => {
+    try {
+      const response = await getTenants();
+      setTenants(response.data.tenants || []);
+    } catch (err) {
+      console.error('Failed to load tenants:', err);
+    }
+  };
+
   useEffect(() => {
     fetchMerchants();
+    fetchTenants();
   }, [page, statusFilter, billingFilter]);
 
   const handleSearch = (e) => {
@@ -86,7 +101,10 @@ function Merchants() {
 
     try {
       // Call create merchant API which verifies UCP
-      const response = await createMerchant({ domain: formData.domain });
+      const response = await createMerchant({
+        domain: formData.domain,
+        tenant_id: formData.tenant_id
+      });
 
       // Check verification result
       if (response.data.verification?.status === 'verified' || response.data.merchant?.status === 'verified') {
@@ -242,7 +260,7 @@ function Merchants() {
   };
 
   const resetForm = () => {
-    setFormData({ domain: '', name: '' });
+    setFormData({ domain: '', name: '', tenant_id: '' });
     setUcpStatus(null);
     setUcpError('');
     setSelectedMerchant(null);
@@ -496,6 +514,29 @@ function Merchants() {
           </>
         }
       >
+        <div className="form-group">
+          <label className="form-label">
+            Tenant
+            <span className="text-danger"> *</span>
+          </label>
+          <select
+            className="form-select"
+            value={formData.tenant_id}
+            onChange={(e) => setFormData({ ...formData, tenant_id: e.target.value })}
+            required
+          >
+            <option value="">Select a tenant</option>
+            {tenants.map((tenant) => (
+              <option key={tenant.id} value={tenant.id}>
+                {tenant.name} ({tenant.domain})
+              </option>
+            ))}
+          </select>
+          <span className="form-error" style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+            Select which tenant this merchant belongs to
+          </span>
+        </div>
+
         <Input
           label="Domain"
           value={formData.domain}
@@ -509,7 +550,7 @@ function Merchants() {
           <Button
             variant="secondary"
             onClick={handleVerifyUcp}
-            disabled={ucpVerifying || ucpStatus === 'success'}
+            disabled={ucpVerifying || ucpStatus === 'success' || !formData.tenant_id}
           >
             {ucpVerifying ? 'Verifying...' : ucpStatus === 'success' ? 'Verified' : 'Verify UCP'}
           </Button>
