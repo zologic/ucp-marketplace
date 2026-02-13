@@ -1,10 +1,7 @@
 #!/bin/sh
 set -e
 
-echo "[Startup] Initializing database..."
-npm run init-db
-
-echo "[Startup] Running migrations..."
+echo "[Startup] Running database migrations..."
 node migrate.js
 
 echo "[Startup] Starting API server..."

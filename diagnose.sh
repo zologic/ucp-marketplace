@@ -3,10 +3,18 @@
 echo "=== UCP Marketplace Diagnostics ==="
 echo ""
 
+# Get database configuration from environment or defaults
+POSTGRES_USER=${POSTGRES_USER:-postgres}
+POSTGRES_DB=${POSTGRES_DB:-ucpready}
+
 # Check if .env exists
 echo "1. Checking .env file..."
 if [ -f .env ]; then
     echo "   ✓ .env file exists"
+    # Load environment variables
+    set -a
+    source .env
+    set +a
 else
     echo "   ✗ .env file MISSING - You need to run setup.sh first!"
     exit 1
@@ -44,8 +52,8 @@ docker compose logs api | grep -i "error\|failed\|cannot connect" | tail -20
 
 # Check admin user exists
 echo ""
-echo "6. Checking if admin user exists in database..."
-docker compose exec -T postgres psql -U ucpready -d ucpready -c "SELECT email, created_at FROM admins LIMIT 1;" 2>&1
+echo "6. Checking if admin user exists in database ($POSTGRES_DB)..."
+docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT email, created_at FROM admins LIMIT 1;" 2>&1
 
 echo ""
 echo "=== Diagnostics Complete ==="

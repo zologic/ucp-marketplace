@@ -1,11 +1,23 @@
 #!/bin/bash
 
+# Get database configuration from environment or defaults
+POSTGRES_USER=${POSTGRES_USER:-postgres}
+POSTGRES_DB=${POSTGRES_DB:-ucpready}
+
+# Load from .env if it exists
+if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+fi
+
 echo "=== Analytics Diagnostics ==="
+echo "Database: $POSTGRES_DB"
 echo ""
 
 # Check if database is accessible
 echo "1. Checking database connection..."
-docker compose exec -T postgres psql -U postgres ucpready -c "SELECT 1;" > /dev/null 2>&1
+docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT 1;" > /dev/null 2>&1
 if [ $? -eq 0 ]; then
     echo "✓ Database accessible"
 else
@@ -17,25 +29,25 @@ fi
 echo ""
 echo "2. Checking event data..."
 echo "   Search events:"
-docker compose exec -T postgres psql -U postgres ucpready -c "SELECT COUNT(*) as count, MAX(created_at) as latest FROM search_events;" -t
+docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT COUNT(*) as count, MAX(created_at) as latest FROM search_events;" -t
 
 echo "   Click events:"
-docker compose exec -T postgres psql -U postgres ucpready -c "SELECT COUNT(*) as count, MAX(created_at) as latest FROM click_events;" -t
+docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT COUNT(*) as count, MAX(created_at) as latest FROM click_events;" -t
 
 echo "   Checkout sessions:"
-docker compose exec -T postgres psql -U postgres ucpready -c "SELECT COUNT(*) as count, MAX(created_at) as latest FROM checkout_sessions;" -t
+docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT COUNT(*) as count, MAX(created_at) as latest FROM checkout_sessions;" -t
 
 echo "   Orders:"
-docker compose exec -T postgres psql -U postgres ucpready -c "SELECT COUNT(*) as count, MAX(created_at) as latest FROM orders;" -t
+docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT COUNT(*) as count, MAX(created_at) as latest FROM orders;" -t
 
 # Check if merchant_daily_stats has data
 echo ""
 echo "3. Checking aggregated stats..."
 echo "   merchant_daily_stats rows:"
-docker compose exec -T postgres psql -U postgres ucpready -c "SELECT COUNT(*) as count, MIN(date) as earliest, MAX(date) as latest FROM merchant_daily_stats;" -t
+docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT COUNT(*) as count, MIN(date) as earliest, MAX(date) as latest FROM merchant_daily_stats;" -t
 
 echo "   Sample of recent stats:"
-docker compose exec -T postgres psql -U postgres ucpready -c "SELECT date, SUM(search_count) as searches, SUM(click_count) as clicks, SUM(revenue_cents) as revenue FROM merchant_daily_stats GROUP BY date ORDER BY date DESC LIMIT 7;"
+docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT date, SUM(search_count) as searches, SUM(click_count) as clicks, SUM(revenue_cents) as revenue FROM merchant_daily_stats GROUP BY date ORDER BY date DESC LIMIT 7;"
 
 # Check if worker is configured to run
 echo ""
@@ -55,7 +67,7 @@ rollupStats(db).then(result => {
 
 echo ""
 echo "5. Checking for missing merchant_ids in events..."
-docker compose exec -T postgres psql -U postgres ucpready -c "
+docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
 SELECT
     'search_events' as table_name,
     COUNT(*) as total,

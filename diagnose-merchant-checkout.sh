@@ -1,5 +1,17 @@
 #!/bin/bash
 
+
+# Get database configuration from environment or defaults
+POSTGRES_USER=${POSTGRES_USER:-postgres}
+POSTGRES_DB=${POSTGRES_DB:-ucpready}
+
+# Load from .env if it exists
+if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+fi
+
 # Diagnostic script to check merchant's embedded checkout capability
 
 MERCHANT_DOMAIN=${1:-"test.zologic.nl"}
@@ -11,7 +23,7 @@ echo ""
 
 # Check merchant record in database
 echo "1. Database merchant record:"
-docker compose exec -T postgres psql -U postgres ucpready -c "
+docker compose exec -T postgres psql -U "$POSTGRES_USER" ucpready -c "
 SELECT
     id,
     domain,
@@ -27,7 +39,7 @@ WHERE domain = '$MERCHANT_DOMAIN';
 
 echo ""
 echo "2. Embedded checkout capability details:"
-docker compose exec -T postgres psql -U postgres ucpready -t -c "
+docker compose exec -T postgres psql -U "$POSTGRES_USER" ucpready -t -c "
 SELECT
     jsonb_pretty(
         (

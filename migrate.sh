@@ -14,6 +14,13 @@ echo "🗄️  UCP Marketplace Migration Runner"
 echo "===================================="
 echo ""
 
+# Get database configuration from environment or defaults
+POSTGRES_USER=${POSTGRES_USER:-postgres}
+POSTGRES_DB=${POSTGRES_DB:-ucpready}
+
+echo "Using database: $POSTGRES_DB"
+echo ""
+
 # Check if Docker is running
 if ! docker compose ps > /dev/null 2>&1; then
     echo -e "${RED}❌ Docker Compose is not available or services are not running${NC}"
@@ -48,7 +55,7 @@ run_migrations() {
         docker compose cp "$MIGRATION" postgres:/tmp/current_migration.sql
 
         # Run migration and capture output
-        OUTPUT=$(docker compose exec -T postgres psql -U postgres -d ucpready -f /tmp/current_migration.sql 2>&1)
+        OUTPUT=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /tmp/current_migration.sql 2>&1)
         EXIT_CODE=$?
 
         if [ $EXIT_CODE -eq 0 ]; then
