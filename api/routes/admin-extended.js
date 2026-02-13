@@ -504,25 +504,26 @@ router.get('/dashboard/stats', requireAuth, async (req, res) => {
             "SELECT COUNT(*) as count FROM tenants WHERE status = 'active'"
         );
 
-        // Month-to-date revenue
+        // Month-to-date revenue (from orders table - real-time)
         const revenueResult = await req.app.locals.db.query(`
             SELECT COALESCE(SUM(revenue_cents), 0) as sum
-            FROM merchant_daily_stats
-            WHERE date >= DATE_TRUNC('month', CURRENT_DATE)
+            FROM orders
+            WHERE created_at >= DATE_TRUNC('month', CURRENT_DATE)
         `);
 
-        // Searches today
+        // Searches today (from search_events - real-time)
         const searchesResult = await req.app.locals.db.query(`
-            SELECT COALESCE(SUM(search_count), 0) as sum
-            FROM merchant_daily_stats
-            WHERE date = CURRENT_DATE
+            SELECT COUNT(*) as sum
+            FROM search_events
+            WHERE DATE(created_at) = CURRENT_DATE
         `);
 
-        // Orders today
+        // Conversions today (from checkout_sessions - real-time)
         const ordersResult = await req.app.locals.db.query(`
-            SELECT COALESCE(SUM(order_count), 0) as sum
-            FROM merchant_daily_stats
-            WHERE date = CURRENT_DATE
+            SELECT COUNT(*) as sum
+            FROM checkout_sessions
+            WHERE DATE(created_at) = CURRENT_DATE
+              AND status != 'abandoned'
         `);
 
         res.json({
