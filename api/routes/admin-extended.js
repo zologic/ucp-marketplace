@@ -643,10 +643,20 @@ router.get('/system/health', requireAuth, async (req, res) => {
                 jobs_processed_24h: 0,
                 jobs_failed_24h: 0,
                 next_crawl: null,
+                uptime_seconds: 0,
                 error: global.workerStatus.error
             };
         } else {
-            health.worker = { status: 'not_running', queue_depth: 0, jobs_processed_24h: 0, jobs_failed_24h: 0, next_crawl: null };
+            // Worker not configured (RUN_WORKER not set) - this is OK for single-instance deploys
+            health.worker = {
+                status: 'degraded',
+                queue_depth: 0,
+                jobs_processed_24h: 0,
+                jobs_failed_24h: 0,
+                next_crawl: null,
+                uptime_seconds: 0,
+                message: 'Background worker not running (RUN_WORKER=false). Scheduled tasks disabled.'
+            };
         }
 
         // Metrics (24h)
