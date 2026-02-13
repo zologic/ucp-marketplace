@@ -7,7 +7,8 @@ import Table from '../components/Table.jsx';
 import {
   getTenants,
   createTenant,
-  updateTenant
+  updateTenant,
+  deleteTenant
 } from '../api/client.js';
 
 function Tenants() {
@@ -21,6 +22,7 @@ function Tenants() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState(null);
 
   // Form state
@@ -126,6 +128,23 @@ function Tenants() {
     setIsDetailsModalOpen(true);
   };
 
+  const openDeleteModal = (tenant) => {
+    setSelectedTenant(tenant);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleDeleteTenant = async () => {
+    try {
+      await deleteTenant(selectedTenant.id);
+      setIsDeleteModalOpen(false);
+      setSelectedTenant(null);
+      fetchTenants();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to delete tenant');
+      setIsDeleteModalOpen(false);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -204,6 +223,9 @@ function Tenants() {
           </Button>
           <Button variant="outline" size="sm" onClick={() => openDetailsModal(row)}>
             View Details
+          </Button>
+          <Button variant="danger" size="sm" onClick={() => openDeleteModal(row)}>
+            Delete
           </Button>
         </div>
       )
@@ -354,6 +376,12 @@ function Tenants() {
               openEditModal(selectedTenant);
             }}>
               Edit Tenant
+            </Button>
+            <Button variant="danger" onClick={() => {
+              setIsDetailsModalOpen(false);
+              openDeleteModal(selectedTenant);
+            }}>
+              Delete Tenant
             </Button>
           </>
         }
@@ -530,6 +558,30 @@ function Tenants() {
             </select>
           </div>
         </form>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Confirm Delete"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleDeleteTenant}>
+              Delete Tenant
+            </Button>
+          </>
+        }
+      >
+        <p>
+          Are you sure you want to delete tenant <strong>{selectedTenant?.name}</strong> ({selectedTenant?.domain})?
+        </p>
+        <p className="text-danger" style={{ marginTop: '12px' }}>
+          This action cannot be undone. The tenant can only be deleted if it has no active merchants.
+        </p>
       </Modal>
     </div>
   );
