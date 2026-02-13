@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { getSystemHealth } from '../api/client.js';
+import Button from '../components/Button.jsx';
+import { getSystemHealth, triggerProductIndexing } from '../api/client.js';
 
 function SystemHealth() {
   const [health, setHealth] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [indexing, setIndexing] = useState(false);
+  const [indexSuccess, setIndexSuccess] = useState(null);
 
   const fetchHealth = async () => {
     try {
@@ -62,6 +65,21 @@ function SystemHealth() {
     return new Date(dateString).toLocaleString();
   };
 
+  const handleTriggerIndexing = async () => {
+    try {
+      setIndexing(true);
+      setIndexSuccess(null);
+      await triggerProductIndexing();
+      setIndexSuccess('Product indexing started successfully. This may take a few minutes.');
+      setTimeout(() => setIndexSuccess(null), 5000);
+    } catch (err) {
+      setError('Failed to trigger product indexing');
+      console.error(err);
+    } finally {
+      setIndexing(false);
+    }
+  };
+
   if (loading && !health) {
     return (
       <div className="loading-container">
@@ -78,6 +96,14 @@ function SystemHealth() {
           <p className="page-description">Monitor system status and performance metrics</p>
         </div>
         <div className="flex items-center gap-16">
+          <Button
+            variant="primary"
+            onClick={handleTriggerIndexing}
+            disabled={indexing}
+          >
+            <i className="fas fa-sync-alt"></i>
+            {indexing ? 'Indexing...' : 'Re-index Products'}
+          </Button>
           {lastUpdated && (
             <span className="text-secondary" style={{ fontSize: '14px' }}>
               Last updated: {lastUpdated.toLocaleTimeString()}
@@ -92,6 +118,10 @@ function SystemHealth() {
 
       {error && (
         <div className="alert alert-danger">{error}</div>
+      )}
+
+      {indexSuccess && (
+        <div className="alert alert-success">{indexSuccess}</div>
       )}
 
       {/* System Status Cards */}
