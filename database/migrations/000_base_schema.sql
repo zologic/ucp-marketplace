@@ -714,6 +714,28 @@ FROM tenants WHERE domain = 'localhost'
 ON CONFLICT (tenant_id) DO NOTHING;
 
 -- ============================================================================
+-- SECTION 14: Mark Consolidated Migrations as Applied
+-- ============================================================================
+-- Since this base schema includes migrations 001-005, mark them as applied
+-- to prevent them from running again and causing duplicate column errors
+
+-- Ensure schema_migrations table exists (created by migrate.js)
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    id SERIAL PRIMARY KEY,
+    migration_file TEXT UNIQUE NOT NULL,
+    applied_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Mark migrations 001-005 as already applied (they're in this base schema)
+INSERT INTO schema_migrations (migration_file) VALUES
+    ('001_add_ucp_business_profile.sql'),
+    ('002_add_product_variations.sql'),
+    ('003_add_mobile_push_tokens.sql'),
+    ('004_add_referral_source.sql'),
+    ('005_structured_categories.sql')
+ON CONFLICT (migration_file) DO NOTHING;
+
+-- ============================================================================
 -- Base Schema Complete
 -- ============================================================================
 -- Total Tables: 25
