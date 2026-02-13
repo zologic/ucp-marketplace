@@ -393,7 +393,20 @@ router.patch('/invoices/:id/status', requireAuth, async (req, res) => {
 // GET /admin/audit-logs - Query audit logs
 router.get('/audit-logs', requireAuth, async (req, res) => {
     try {
-        const { admin_id, action, resource_type, resource_id, start_date, end_date, limit = 50, offset = 0 } = req.query;
+        const {
+            admin_user, // Frontend sends admin_user (admin ID)
+            admin_id,
+            action,
+            resource_type,
+            resource_id,
+            entity_id, // Frontend sends entity_id as resource_id
+            start_date,
+            end_date,
+            limit = 50,
+            page = 1
+        } = req.query;
+
+        const offset = (parseInt(page) - 1) * parseInt(limit);
 
         let query = `
             SELECT al.*, a.email as admin_email
@@ -405,9 +418,11 @@ router.get('/audit-logs', requireAuth, async (req, res) => {
         const params = [];
         let paramIndex = 1;
 
-        if (admin_id) {
+        // Handle both admin_user (from frontend) and admin_id
+        const adminIdValue = admin_user || admin_id;
+        if (adminIdValue) {
             query += ` AND al.admin_id = $${paramIndex}`;
-            params.push(admin_id);
+            params.push(adminIdValue);
             paramIndex++;
         }
 
@@ -423,9 +438,11 @@ router.get('/audit-logs', requireAuth, async (req, res) => {
             paramIndex++;
         }
 
-        if (resource_id) {
+        // Handle both entity_id (from frontend) and resource_id
+        const resourceIdValue = entity_id || resource_id;
+        if (resourceIdValue) {
             query += ` AND al.resource_id = $${paramIndex}`;
-            params.push(resource_id);
+            params.push(resourceIdValue);
             paramIndex++;
         }
 
@@ -436,19 +453,33 @@ router.get('/audit-logs', requireAuth, async (req, res) => {
         }
 
         if (end_date) {
-            query += ` AND al.created_at <= $${paramIndex}`;
+            // Add 1 day to include the full end date
+            query += ` AND al.created_at < $${paramIndex}::date + interval '1 day'`;
             params.push(end_date);
             paramIndex++;
         }
+
+        // Get total count for pagination
+        const countQuery = query.replace('SELECT al.*, a.email as admin_email', 'SELECT COUNT(*)');
+        const countResult = await req.app.locals.db.query(countQuery, params);
+        const totalCount = parseInt(countResult.rows[0].count);
+        const totalPages = Math.ceil(totalCount / parseInt(limit));
 
         query += ` ORDER BY al.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
         params.push(parseInt(limit), parseInt(offset));
 
         const result = await req.app.locals.db.query(query, params);
 
+        // Get list of admin users for filter dropdown
+        const adminUsersResult = await req.app.locals.db.query(
+            'SELECT id, email FROM admins ORDER BY email'
+        );
+
         res.json({
             logs: result.rows,
-            count: result.rows.length
+            count: totalCount,
+            total_pages: totalPages,
+            admin_users: adminUsersResult.rows
         });
     } catch (error) {
         console.error('List audit logs error:', error);
