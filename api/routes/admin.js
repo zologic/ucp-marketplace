@@ -1137,7 +1137,9 @@ router.get('/merchants/:id', requireAuth, async (req, res) => {
         const result = await req.app.locals.db.query(`
             SELECT m.*, t.name as tenant_name, t.domain as tenant_domain,
                    mb.status as billing_status, mb.billing_mode,
-                   mb.cpc_rate, mb.cpc_billing_enabled, mb.cpc_enabled_at
+                   mb.cpc_rate, mb.cpc_billing_enabled, mb.cpc_enabled_at,
+                   (SELECT COUNT(*) FROM products WHERE merchant_id = m.id) as product_count,
+                   (SELECT COUNT(DISTINCT mc.id) FROM merchant_categories mc WHERE mc.merchant_id = m.id) as category_count
             FROM merchants m
             JOIN tenants t ON m.tenant_id = t.id
             LEFT JOIN merchant_billing mb ON m.id = mb.merchant_id
@@ -1321,9 +1323,13 @@ router.get('/tenants/:id', requireAuth, async (req, res) => {
 
         const result = await req.app.locals.db.query(`
             SELECT t.*,
-                   COUNT(m.id) as merchant_count
+                   COUNT(DISTINCT m.id) as merchant_count,
+                   COUNT(DISTINCT p.id) as product_count,
+                   COUNT(DISTINCT c.id) as category_count
             FROM tenants t
             LEFT JOIN merchants m ON m.tenant_id = t.id
+            LEFT JOIN products p ON p.tenant_id = t.id
+            LEFT JOIN categories c ON c.tenant_id = t.id
             WHERE t.id = $1
             GROUP BY t.id
         `, [id]);
@@ -1457,6 +1463,433 @@ router.patch('/tenants/:id/status', requireAuth, async (req, res) => {
     } catch (error) {
         console.error('Update tenant status error:', error);
         res.status(500).json({ error: 'Failed to update tenant status' });
+    }
+});
+
+// ============================================================================
+// CATEGORY MANAGEMENT
+// ============================================================================
+
+// GET /admin/categories - List all categories with product counts
+router.get('/categories', requireAuth, async (req, res) => {
+    try {
+        const { tenant_id } = req.query;
+
+        let query = `
+            SELECT
+                c.id, c.tenant_id, c.name, c.slug, c.parent_id,
+                c.google_taxonomy_id, c.google_taxonomy_path,
+                c.description, c.image_url, c.display_order, c.is_active,
+                c.created_at, c.updated_at,
+                t.name as tenant_name,
+                COUNT(DISTINCT pc.product_id) as product_count,
+                COUNT(DISTINCT p.merchant_id) as merchant_count
+            FROM categories c
+            LEFT JOIN tenants t ON c.tenant_id = t.id
+            LEFT JOIN product_categories pc ON c.id = pc.category_id
+            LEFT JOIN products p ON pc.product_id = p.id
+        `;
+
+        const params = [];
+        if (tenant_id) {
+            query += ` WHERE c.tenant_id = $1`;
+            params.push(tenant_id);
+        }
+
+        query += `
+            GROUP BY c.id, t.name
+            ORDER BY c.tenant_id, c.display_order, c.name
+        `;
+
+        const result = await req.app.locals.db.query(query, params);
+        res.json({ categories: result.rows });
+    } catch (error) {
+        console.error('List categories error:', error);
+        res.status(500).json({ error: 'Failed to list categories' });
+    }
+});
+
+// GET /admin/categories/:id - Get single category
+router.get('/categories/:id', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const result = await req.app.locals.db.query(`
+            SELECT
+                c.*,
+                t.name as tenant_name,
+                COUNT(DISTINCT pc.product_id) as product_count
+            FROM categories c
+            LEFT JOIN tenants t ON c.tenant_id = t.id
+            LEFT JOIN product_categories pc ON c.id = pc.category_id
+            WHERE c.id = $1
+            GROUP BY c.id, t.name
+        `, [id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Category not found' });
+        }
+
+        res.json({ category: result.rows[0] });
+    } catch (error) {
+        console.error('Get category error:', error);
+        res.status(500).json({ error: 'Failed to get category' });
+    }
+});
+
+// POST /admin/categories - Create category
+router.post('/categories', requireAuth, async (req, res) => {
+    try {
+        const {
+            tenant_id, name, slug, parent_id, google_taxonomy_id,
+            google_taxonomy_path, description, image_url, display_order
+        } = req.body;
+
+        if (!tenant_id || !name) {
+            return res.status(400).json({ error: 'tenant_id and name are required' });
+        }
+
+        const categorySlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+        const result = await req.app.locals.db.query(`
+            INSERT INTO categories (
+                tenant_id, name, slug, parent_id, google_taxonomy_id,
+                google_taxonomy_path, description, image_url, display_order
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING *
+        `, [
+            tenant_id, name, categorySlug, parent_id || null,
+            google_taxonomy_id || null, google_taxonomy_path || null,
+            description || null, image_url || null, display_order || 0
+        ]);
+
+        await logAuditEvent(req.app.locals.db, req.admin.id, 'category_created', 'category', result.rows[0].id, { name });
+
+        res.status(201).json({ category: result.rows[0] });
+    } catch (error) {
+        console.error('Create category error:', error);
+        if (error.code === '23505') { // Unique violation
+            res.status(400).json({ error: 'Category slug already exists for this tenant' });
+        } else {
+            res.status(500).json({ error: 'Failed to create category' });
+        }
+    }
+});
+
+// PUT /admin/categories/:id - Update category
+router.put('/categories/:id', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            name, slug, parent_id, google_taxonomy_id,
+            google_taxonomy_path, description, image_url,
+            display_order, is_active
+        } = req.body;
+
+        const result = await req.app.locals.db.query(`
+            UPDATE categories
+            SET
+                name = COALESCE($1, name),
+                slug = COALESCE($2, slug),
+                parent_id = COALESCE($3, parent_id),
+                google_taxonomy_id = COALESCE($4, google_taxonomy_id),
+                google_taxonomy_path = COALESCE($5, google_taxonomy_path),
+                description = COALESCE($6, description),
+                image_url = COALESCE($7, image_url),
+                display_order = COALESCE($8, display_order),
+                is_active = COALESCE($9, is_active),
+                updated_at = NOW()
+            WHERE id = $10
+            RETURNING *
+        `, [
+            name, slug, parent_id, google_taxonomy_id,
+            google_taxonomy_path, description, image_url,
+            display_order, is_active, id
+        ]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Category not found' });
+        }
+
+        await logAuditEvent(req.app.locals.db, req.admin.id, 'category_updated', 'category', id, req.body);
+
+        res.json({ category: result.rows[0] });
+    } catch (error) {
+        console.error('Update category error:', error);
+        res.status(500).json({ error: 'Failed to update category' });
+    }
+});
+
+// DELETE /admin/categories/:id - Delete category
+router.delete('/categories/:id', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Check product count first
+        const checkResult = await req.app.locals.db.query(`
+            SELECT COUNT(*) as count
+            FROM product_categories
+            WHERE category_id = $1
+        `, [id]);
+
+        if (parseInt(checkResult.rows[0].count) > 0) {
+            return res.status(400).json({
+                error: 'Cannot delete category with linked products',
+                product_count: parseInt(checkResult.rows[0].count)
+            });
+        }
+
+        const result = await req.app.locals.db.query(`
+            DELETE FROM categories
+            WHERE id = $1
+            RETURNING name
+        `, [id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Category not found' });
+        }
+
+        await logAuditEvent(req.app.locals.db, req.admin.id, 'category_deleted', 'category', id, {
+            name: result.rows[0].name
+        });
+
+        res.json({ message: 'Category deleted successfully' });
+    } catch (error) {
+        console.error('Delete category error:', error);
+        res.status(500).json({ error: 'Failed to delete category' });
+    }
+});
+
+// ============================================================================
+// PRODUCT MANAGEMENT
+// ============================================================================
+
+// GET /admin/products - List all products with filters
+router.get('/products', requireAuth, async (req, res) => {
+    try {
+        const { tenant_id, merchant_id, category_id, search, page = 1, limit = 50 } = req.query;
+        const offset = (page - 1) * limit;
+
+        let query = `
+            SELECT
+                p.id, p.external_id, p.name, p.description,
+                p.price_cents, p.currency, p.image_url, p.stock_status,
+                p.has_variations, p.indexed_at,
+                m.domain as merchant_domain,
+                m.id as merchant_id,
+                t.name as tenant_name,
+                p.tenant_id,
+                ARRAY_AGG(DISTINCT c.name) FILTER (WHERE c.name IS NOT NULL) as categories
+            FROM products p
+            JOIN merchants m ON p.merchant_id = m.id
+            JOIN tenants t ON p.tenant_id = t.id
+            LEFT JOIN product_categories pc ON p.id = pc.product_id
+            LEFT JOIN categories c ON pc.category_id = c.id
+            WHERE 1=1
+        `;
+
+        const params = [];
+        let paramIndex = 1;
+
+        if (tenant_id) {
+            query += ` AND p.tenant_id = $${paramIndex}`;
+            params.push(tenant_id);
+            paramIndex++;
+        }
+
+        if (merchant_id) {
+            query += ` AND p.merchant_id = $${paramIndex}`;
+            params.push(merchant_id);
+            paramIndex++;
+        }
+
+        if (category_id) {
+            query += ` AND pc.category_id = $${paramIndex}`;
+            params.push(category_id);
+            paramIndex++;
+        }
+
+        if (search) {
+            query += ` AND (p.name ILIKE $${paramIndex} OR p.description ILIKE $${paramIndex})`;
+            params.push(`%${search}%`);
+            paramIndex++;
+        }
+
+        query += `
+            GROUP BY p.id, m.domain, m.id, t.name
+            ORDER BY p.indexed_at DESC
+            LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+        `;
+
+        params.push(limit, offset);
+
+        const result = await req.app.locals.db.query(query, params);
+
+        // Get total count
+        let countQuery = `
+            SELECT COUNT(DISTINCT p.id) as total
+            FROM products p
+            LEFT JOIN product_categories pc ON p.id = pc.product_id
+            WHERE 1=1
+        `;
+
+        const countParams = [];
+        let countParamIndex = 1;
+
+        if (tenant_id) {
+            countQuery += ` AND p.tenant_id = $${countParamIndex}`;
+            countParams.push(tenant_id);
+            countParamIndex++;
+        }
+
+        if (merchant_id) {
+            countQuery += ` AND p.merchant_id = $${countParamIndex}`;
+            countParams.push(merchant_id);
+            countParamIndex++;
+        }
+
+        if (category_id) {
+            countQuery += ` AND pc.category_id = $${countParamIndex}`;
+            countParams.push(category_id);
+            countParamIndex++;
+        }
+
+        if (search) {
+            countQuery += ` AND (p.name ILIKE $${countParamIndex} OR p.description ILIKE $${countParamIndex})`;
+            countParams.push(`%${search}%`);
+        }
+
+        const countResult = await req.app.locals.db.query(countQuery, countParams);
+
+        res.json({
+            products: result.rows,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total: parseInt(countResult.rows[0].total),
+                pages: Math.ceil(countResult.rows[0].total / limit)
+            }
+        });
+    } catch (error) {
+        console.error('List products error:', error);
+        res.status(500).json({ error: 'Failed to list products' });
+    }
+});
+
+// GET /admin/products/:id - Get single product
+router.get('/products/:id', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const result = await req.app.locals.db.query(`
+            SELECT
+                p.*,
+                m.domain as merchant_domain,
+                t.name as tenant_name,
+                ARRAY_AGG(
+                    JSON_BUILD_OBJECT(
+                        'id', c.id,
+                        'name', c.name,
+                        'slug', c.slug
+                    )
+                ) FILTER (WHERE c.id IS NOT NULL) as categories
+            FROM products p
+            JOIN merchants m ON p.merchant_id = m.id
+            JOIN tenants t ON p.tenant_id = t.id
+            LEFT JOIN product_categories pc ON p.id = pc.product_id
+            LEFT JOIN categories c ON pc.category_id = c.id
+            WHERE p.id = $1
+            GROUP BY p.id, m.domain, t.name
+        `, [id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        res.json({ product: result.rows[0] });
+    } catch (error) {
+        console.error('Get product error:', error);
+        res.status(500).json({ error: 'Failed to get product' });
+    }
+});
+
+// PUT /admin/products/:id - Update product
+router.put('/products/:id', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            name, description, price_cents, currency,
+            stock_status, category_ids
+        } = req.body;
+
+        // Update product basic fields
+        const result = await req.app.locals.db.query(`
+            UPDATE products
+            SET
+                name = COALESCE($1, name),
+                description = COALESCE($2, description),
+                price_cents = COALESCE($3, price_cents),
+                currency = COALESCE($4, currency),
+                stock_status = COALESCE($5, stock_status)
+            WHERE id = $6
+            RETURNING *
+        `, [name, description, price_cents, currency, stock_status, id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        // Update category associations if provided
+        if (category_ids && Array.isArray(category_ids)) {
+            // Remove existing associations
+            await req.app.locals.db.query(`
+                DELETE FROM product_categories
+                WHERE product_id = $1
+            `, [id]);
+
+            // Add new associations
+            for (const categoryId of category_ids) {
+                await req.app.locals.db.query(`
+                    INSERT INTO product_categories (product_id, category_id)
+                    VALUES ($1, $2)
+                    ON CONFLICT DO NOTHING
+                `, [id, categoryId]);
+            }
+        }
+
+        await logAuditEvent(req.app.locals.db, req.admin.id, 'product_updated', 'product', id, req.body);
+
+        res.json({ product: result.rows[0] });
+    } catch (error) {
+        console.error('Update product error:', error);
+        res.status(500).json({ error: 'Failed to update product' });
+    }
+});
+
+// DELETE /admin/products/:id - Delete product
+router.delete('/products/:id', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const result = await req.app.locals.db.query(`
+            DELETE FROM products
+            WHERE id = $1
+            RETURNING name
+        `, [id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        await logAuditEvent(req.app.locals.db, req.admin.id, 'product_deleted', 'product', id, {
+            name: result.rows[0].name
+        });
+
+        res.json({ message: 'Product deleted successfully' });
+    } catch (error) {
+        console.error('Delete product error:', error);
+        res.status(500).json({ error: 'Failed to delete product' });
     }
 });
 
