@@ -327,7 +327,7 @@ function AdminUsers() {
               required
             >
               <option value="admin">Admin</option>
-              <option value="super_admin">Super Admin</option>
+              <option value="superadmin">Super Admin</option>
             </select>
             <span className="form-error" style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
               Super admins have full access including user management
