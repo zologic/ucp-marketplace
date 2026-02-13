@@ -103,9 +103,10 @@ if [ ! -f .env ]; then
     POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
     echo "Generated secure database password"
 
-    # JWT secret
+    # JWT secrets
     JWT_SECRET=$(openssl rand -base64 64 | tr -d "=+/" | cut -c1-64)
-    echo "Generated JWT secret"
+    ADMIN_JWT_SECRET=$(openssl rand -base64 64 | tr -d "=+/" | cut -c1-64)
+    echo "Generated JWT secrets"
 
     # Create .env file
     cat > .env << EOF
@@ -131,6 +132,7 @@ DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES
 PORT=3000
 NODE_ENV=production
 JWT_SECRET=${JWT_SECRET}
+ADMIN_JWT_SECRET=${ADMIN_JWT_SECRET}
 JWT_EXPIRY=24h
 
 # Worker Configuration
@@ -235,10 +237,21 @@ echo ""
 # STEP 5: Start Docker Services
 # ============================================================================
 
-echo -e "${YELLOW}[5/8] Starting Docker services...${NC}"
+echo -e "${YELLOW}[5/8] Starting Docker services (clean start)...${NC}"
 
 # Stop any existing containers
+echo "Stopping existing containers..."
 docker compose down 2>/dev/null || true
+
+# Remove all volumes for clean start
+echo "Removing all volumes for clean installation..."
+docker volume rm ucp-marketplace_postgres_data 2>/dev/null || true
+docker volume rm ucp-marketplace_redis_data 2>/dev/null || true
+docker volume rm ucp-marketplace_caddy_data 2>/dev/null || true
+docker volume rm ucp-marketplace_caddy_config 2>/dev/null || true
+
+echo -e "${GREEN}✓ Clean slate ready${NC}"
+echo ""
 
 # Build and start services
 echo "Building Docker images (this may take a few minutes)..."
@@ -285,38 +298,8 @@ echo ""
 
 echo -e "${YELLOW}[6/8] Verifying database setup...${NC}"
 
-# Wait a bit for migrations to complete
+# Wait for migrations to complete
 sleep 5
-
-# Check if API is healthy or restarting (migration issue)
-API_STATUS=$(docker compose ps api --format json | grep -o '"State":"[^"]*"' | cut -d'"' -f4)
-
-if [ "$API_STATUS" = "restarting" ]; then
-    echo -e "${YELLOW}⚠ API is restarting - checking for migration conflicts...${NC}"
-
-    # Check logs for migration errors
-    if docker compose logs api | grep -q "already exists"; then
-        echo -e "${YELLOW}Found migration conflict - fixing automatically...${NC}"
-
-        # Mark consolidated migrations as applied to prevent conflicts
-        docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" > /dev/null 2>&1 << EOF
-INSERT INTO schema_migrations (migration_file) VALUES
-    ('001_add_ucp_business_profile.sql'),
-    ('002_add_product_variations.sql'),
-    ('003_add_mobile_push_tokens.sql'),
-    ('004_add_referral_source.sql'),
-    ('005_structured_categories.sql')
-ON CONFLICT (migration_file) DO NOTHING;
-EOF
-
-        echo -e "${GREEN}✓ Migration conflicts resolved${NC}"
-        echo "Restarting API..."
-        docker compose restart api
-
-        # Wait for API to come up
-        sleep 5
-    fi
-fi
 
 # Check if migrations ran successfully
 MIGRATION_CHECK=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c "SELECT COUNT(*) FROM schema_migrations;" 2>&1 || echo "0")
