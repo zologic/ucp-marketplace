@@ -336,13 +336,14 @@ function Tenants() {
             </select>
           </div>
         </form>
-      </SlidePanel>
+      </Modal>
 
-      {/* Tenant Details Modal */}
-      <Modal
+      {/* Tenant Details SlidePanel */}
+      <SlidePanel
         isOpen={isDetailsModalOpen}
         onClose={() => setIsDetailsModalOpen(false)}
         title="Tenant Details"
+        width="600px"
         footer={
           <>
             <Button variant="outline" onClick={() => setIsDetailsModalOpen(false)}>
@@ -529,7 +530,7 @@ function Tenants() {
             </select>
           </div>
         </form>
-      </SlidePanel>
+      </Modal>
     </div>
   );
 }
