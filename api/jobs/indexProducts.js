@@ -87,6 +87,58 @@ async function indexProducts(db) {
 
                 const products = productsResponse.data.data || productsResponse.data.products || [];
 
+                // First, process and create categories with full metadata from UCP
+                const categoryMap = new Map(); // slug -> category data
+                for (const product of products) {
+                    if (product.categories && Array.isArray(product.categories)) {
+                        for (const cat of product.categories) {
+                            if (cat.slug && !categoryMap.has(cat.slug)) {
+                                categoryMap.set(cat.slug, {
+                                    name: cat.name,
+                                    slug: cat.slug,
+                                    google_taxonomy_id: cat.google_taxonomy_id || null,
+                                    google_taxonomy_path: cat.google_taxonomy_path || null,
+                                    description: cat.description || null,
+                                    image_url: cat.image_url || null
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // Bulk upsert categories with full metadata
+                for (const [slug, catData] of categoryMap) {
+                    try {
+                        await db.query(`
+                            INSERT INTO categories (
+                                tenant_id, name, slug, google_taxonomy_id,
+                                google_taxonomy_path, description, image_url,
+                                is_active, display_order
+                            )
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, true, 0)
+                            ON CONFLICT (tenant_id, slug) DO UPDATE SET
+                                name = EXCLUDED.name,
+                                google_taxonomy_id = COALESCE(EXCLUDED.google_taxonomy_id, categories.google_taxonomy_id),
+                                google_taxonomy_path = COALESCE(EXCLUDED.google_taxonomy_path, categories.google_taxonomy_path),
+                                description = COALESCE(EXCLUDED.description, categories.description),
+                                image_url = COALESCE(EXCLUDED.image_url, categories.image_url),
+                                updated_at = NOW()
+                        `, [
+                            merchant.tenant_id,
+                            catData.name,
+                            catData.slug,
+                            catData.google_taxonomy_id,
+                            catData.google_taxonomy_path,
+                            catData.description,
+                            catData.image_url
+                        ]);
+                    } catch (catError) {
+                        console.warn(`[indexProducts] Failed to upsert category ${catData.name}:`, catError.message);
+                    }
+                }
+
+                console.log(`[indexProducts] ${merchant.domain}: Processed ${categoryMap.size} categories with metadata`);
+
                 // Upsert products into database with signing_status = 'pending'
                 for (const product of products) {
                     try {
@@ -101,7 +153,7 @@ async function indexProducts(db) {
                         // Process categories - support UCP 2026 format (array) and legacy (string)
                         let categoryName = null;
                         if (product.categories && Array.isArray(product.categories) && product.categories.length > 0) {
-                            // Use first category name from array
+                            // Use first category name from array (for backward compat with product.category field)
                             categoryName = product.categories[0].name;
                         } else if (product.category) {
                             // Legacy format: single category string
@@ -193,6 +245,26 @@ async function indexProducts(db) {
                             stockStatus
                         ]);
 
+                        // Link product to all its categories
+                        if (product.categories && Array.isArray(product.categories)) {
+                            for (const cat of product.categories) {
+                                if (cat.slug) {
+                                    try {
+                                        await db.query(`
+                                            INSERT INTO product_categories (product_id, category_id)
+                                            SELECT p.id, c.id
+                                            FROM products p
+                                            JOIN categories c ON c.tenant_id = p.tenant_id AND c.slug = $1
+                                            WHERE p.merchant_id = $2 AND p.external_id = $3
+                                            ON CONFLICT (product_id, category_id) DO NOTHING
+                                        `, [cat.slug, merchant.id, product.id]);
+                                    } catch (linkError) {
+                                        console.warn(`[indexProducts] Failed to link product ${product.id} to category ${cat.slug}:`, linkError.message);
+                                    }
+                                }
+                            }
+                        }
+
                         productsIndexed++;
                         totalIndexed++;
                     } catch (productError) {
@@ -220,45 +292,6 @@ async function indexProducts(db) {
                       AND indexed_at < NOW() - INTERVAL '7 days'
                       AND stock_status != 'out_of_stock'
                 `, [merchant.id]);
-
-                // Auto-create categories from products
-                await db.query(`
-                    INSERT INTO categories (tenant_id, name, slug, is_active, display_order)
-                    SELECT DISTINCT
-                        p.tenant_id,
-                        p.category as name,
-                        LOWER(REGEXP_REPLACE(p.category, '[^a-z0-9]+', '-', 'gi')) as slug,
-                        true as is_active,
-                        0 as display_order
-                    FROM products p
-                    WHERE p.merchant_id = $1
-                      AND p.category IS NOT NULL
-                      AND p.category != ''
-                      AND p.category != 'null'
-                    ON CONFLICT (tenant_id, slug) DO NOTHING
-                `, [merchant.id]);
-
-                // Auto-link products to categories
-                await db.query(`
-                    INSERT INTO product_categories (product_id, category_id)
-                    SELECT DISTINCT
-                        p.id as product_id,
-                        c.id as category_id
-                    FROM products p
-                    JOIN categories c ON
-                        c.tenant_id = p.tenant_id
-                        AND c.slug = LOWER(REGEXP_REPLACE(p.category, '[^a-z0-9]+', '-', 'gi'))
-                    WHERE p.merchant_id = $1
-                      AND p.category IS NOT NULL
-                      AND p.category != ''
-                      AND p.category != 'null'
-                      AND NOT EXISTS (
-                        SELECT 1 FROM product_categories pc
-                        WHERE pc.product_id = p.id AND pc.category_id = c.id
-                      )
-                `, [merchant.id]);
-
-                console.log(`[indexProducts] Categories auto-created and linked for ${merchant.domain}`);
 
                 // Log successful attempt
                 await db.query(`
