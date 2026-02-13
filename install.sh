@@ -192,22 +192,78 @@ echo -e "${YELLOW}[4/8] Configuring reverse proxy...${NC}"
 # Load env vars safely (only get DOMAIN)
 DOMAIN=$(grep "^DOMAIN=" .env | cut -d'=' -f2-)
 
-cat > Caddyfile << EOF
+# Generate Caddyfile based on domain
+if [ "$DOMAIN" = "localhost" ]; then
+    # Development configuration (no HTTPS)
+    cat > Caddyfile << 'EOF'
 # Auto-generated Caddyfile - Do not edit manually
 {
     auto_https off
 }
 
 :80 {
-    # Frontend routes
-    handle /* {
-        reverse_proxy frontend:80
+    # API routes
+    handle /api/* {
+        reverse_proxy api:3000
+    }
+
+    handle /admin/* {
+        reverse_proxy api:3000
+    }
+
+    handle /graphql {
+        reverse_proxy api:3000
+    }
+
+    handle /webhooks/* {
+        reverse_proxy api:3000
+    }
+
+    # Health check
+    handle /health {
+        reverse_proxy api:3000
     }
 
     # Admin UI routes
     handle /admin-ui/* {
         reverse_proxy admin:80
     }
+
+    # Frontend (default)
+    handle {
+        reverse_proxy frontend:80
+    }
+}
+EOF
+else
+    # Production configuration with HTTPS and security headers
+    cat > Caddyfile << EOF
+# Auto-generated Caddyfile - Do not edit manually
+
+${DOMAIN} {
+    # Enable automatic HTTPS
+    tls {
+        protocols tls1.2 tls1.3
+    }
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Allow embedding merchant checkouts in iframes
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: https:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self'; frame-src *; frame-ancestors 'self'"
+        # CORS headers
+        Access-Control-Allow-Origin "*"
+        Access-Control-Allow-Methods "GET, POST, OPTIONS, PUT, DELETE"
+        Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+        Access-Control-Max-Age "86400"
+    }
+
+    # Enable compression
+    encode gzip zstd
 
     # API routes
     handle /api/* {
@@ -230,8 +286,33 @@ cat > Caddyfile << EOF
     handle /health {
         reverse_proxy api:3000
     }
+
+    # Admin UI routes
+    handle /admin-ui/* {
+        reverse_proxy admin:80
+    }
+
+    # Frontend (default)
+    handle {
+        reverse_proxy frontend:80
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10mb
+            roll_keep 10
+        }
+        level INFO
+    }
+}
+
+# HTTP fallback (redirect to HTTPS)
+http://${DOMAIN} {
+    redir https://{host}{uri} permanent
 }
 EOF
+fi
 
 echo -e "${GREEN}✓ Caddyfile generated${NC}"
 echo ""
