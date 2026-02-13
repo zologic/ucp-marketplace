@@ -453,6 +453,64 @@ body {
     font-size: 12px;
 }
 
+/* Category Breadcrumbs */
+.category-breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 0;
+    font-size: 14px;
+    flex-wrap: wrap;
+}
+
+.breadcrumb-item {
+    color: #6b7280;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.breadcrumb-item.clickable {
+    cursor: pointer;
+    color: #667eea;
+}
+
+.breadcrumb-item.clickable:hover {
+    color: #764ba2;
+    text-decoration: underline;
+}
+
+.breadcrumb-item.active {
+    color: #1f2937;
+    font-weight: 600;
+}
+
+.breadcrumb-separator {
+    color: #d1d5db;
+    font-size: 16px;
+    user-select: none;
+}
+
+/* Hierarchical category list */
+.category-item-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.category-expand-icon {
+    color: #9ca3af;
+    font-size: 14px;
+    font-weight: bold;
+    width: 16px;
+    text-align: center;
+    transition: transform 0.2s ease;
+}
+
+.category-item.expanded .category-expand-icon {
+    transform: rotate(90deg);
+}
+
 /* Bottom Sheet */
 .bottom-sheet-backdrop {
     position: fixed;
@@ -553,6 +611,84 @@ body {
     border-radius: 12px;
 }
 
+/* Smart Filter Chips - Separate from category chips */
+.filter-chips-container {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 12px 0;
+}
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #ffffff;
+    border: none;
+    border-radius: 16px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.filter-chip:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.filter-chip-label {
+    line-height: 1;
+}
+
+.filter-chip-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-left: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    font-size: 16px;
+    line-height: 1;
+    transition: background 0.2s ease;
+}
+
+.filter-chip-remove:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Filters button (opens bottom sheet) */
+.filters-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: #ffffff;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.filters-button:hover {
+    border-color: #667eea;
+    color: #667eea;
+    background: #f5f7ff;
+}
+
+.filters-button svg {
+    width: 20px;
+    height: 20px;
+}
+
 /* Mobile optimizations */
 @media (max-width: 768px) {
     .category-chips {
@@ -567,6 +703,240 @@ body {
     .bottom-sheet-overlay {
         max-height: 80vh;
     }
+
+    .filter-chips-container {
+        padding: 10px;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .filter-chips-container::-webkit-scrollbar {
+        display: none;
+    }
+
+    .filter-chip {
+        flex-shrink: 0;
+    }
+}
+
+/* Filter Bottom Sheet */
+.filter-sheet-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.filter-sheet-overlay.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.filter-sheet {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border-radius: 20px 20px 0 0;
+    max-height: 70vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.filter-sheet-overlay.active .filter-sheet {
+    transform: translateY(0);
+}
+
+.filter-sheet-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.filter-sheet-header h3 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 0;
+}
+
+.filter-sheet-close {
+    background: none;
+    border: none;
+    font-size: 32px;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.filter-sheet-close:hover {
+    color: #1f2937;
+}
+
+.filter-sheet-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+}
+
+.filter-section {
+    margin-bottom: 32px;
+}
+
+.filter-section:last-child {
+    margin-bottom: 0;
+}
+
+.filter-section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0 0 16px 0;
+}
+
+/* Price Range */
+.price-range-display {
+    background: #f3f4f6;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    text-align: center;
+}
+
+.price-range-label {
+    font-size: 18px;
+    font-weight: 600;
+    color: #667eea;
+}
+
+.price-inputs {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.price-input-group {
+    flex: 1;
+}
+
+.price-input-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: #6b7280;
+    margin-bottom: 6px;
+}
+
+.price-input-group input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 16px;
+    color: #1f2937;
+    transition: border-color 0.2s ease;
+}
+
+.price-input-group input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.price-input-separator {
+    font-size: 18px;
+    font-weight: 600;
+    color: #9ca3af;
+    padding-top: 24px;
+}
+
+/* Stock Checkbox */
+.filter-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    padding: 12px;
+    background: #f9fafb;
+    border-radius: 8px;
+    transition: background 0.2s ease;
+}
+
+.filter-checkbox:hover {
+    background: #f3f4f6;
+}
+
+.filter-checkbox input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: #667eea;
+}
+
+.filter-checkbox span {
+    font-size: 15px;
+    font-weight: 500;
+    color: #374151;
+}
+
+/* Footer */
+.filter-sheet-footer {
+    display: flex;
+    gap: 12px;
+    padding: 20px 24px;
+    border-top: 1px solid #e5e7eb;
+    background: #ffffff;
+}
+
+.filter-sheet-footer .btn {
+    flex: 1;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.filter-sheet-footer .btn-secondary {
+    background: #f3f4f6;
+    border: 2px solid #e5e7eb;
+    color: #374151;
+}
+
+.filter-sheet-footer .btn-secondary:hover {
+    background: #e5e7eb;
+}
+
+.filter-sheet-footer .btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: #ffffff;
+}
+
+.filter-sheet-footer .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
 .results-section {
@@ -645,12 +1015,30 @@ body {
     color: #666;
     line-height: 1.4;
     margin-bottom: 10px;
-    max-height: 40px;
     overflow: hidden;
     text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+    word-wrap: break-word;
+}
+
+/* Mobile: single line truncation (60 chars handled in JS) */
+@media (max-width: 768px) {
+    .product-description {
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+        max-height: 20px;
+        font-size: 13px;
+    }
+}
+
+/* Desktop: two line truncation (120 chars handled in JS) */
+@media (min-width: 769px) {
+    .product-description {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        max-height: 40px;
+    }
 }
 
 .product-merchant {

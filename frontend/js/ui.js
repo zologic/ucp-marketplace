@@ -85,9 +85,9 @@ function createProductCard(product) {
 
     const imageSrc = product.image_url || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23f5f5f5" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" font-family="Arial" font-size="16" fill="%23999" text-anchor="middle" dy=".3em"%3ENo Image%3C/text%3E%3C/svg%3E';
 
-    // Build description HTML if available
+    // Build description HTML if available (with truncation for mobile)
     const descriptionHtml = product.description_short
-        ? `<p class="product-description">${escapeHtml(product.description_short)}</p>`
+        ? `<p class="product-description">${escapeHtml(truncateDescription(product.description_short, 60, 120))}</p>`
         : '';
 
     // Build variations HTML if product has variations
@@ -239,6 +239,34 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+/**
+ * Truncate text based on screen size
+ * @param {string} text - Text to truncate
+ * @param {number} mobileLimit - Character limit for mobile (default: 60)
+ * @param {number} desktopLimit - Character limit for desktop (default: 120)
+ * @returns {string} Truncated text with ellipsis if needed
+ */
+function truncateDescription(text, mobileLimit = 60, desktopLimit = 120) {
+    if (!text) return '';
+
+    const isMobile = window.innerWidth < 768;
+    const limit = isMobile ? mobileLimit : desktopLimit;
+
+    if (text.length <= limit) {
+        return text;
+    }
+
+    // Find last complete word before limit
+    const truncated = text.substring(0, limit);
+    const lastSpace = truncated.lastIndexOf(' ');
+
+    if (lastSpace > 0) {
+        return truncated.substring(0, lastSpace) + '...';
+    }
+
+    return truncated + '...';
 }
 
 /**

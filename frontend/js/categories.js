@@ -205,3 +205,190 @@ export function setSelectedCategorySlug(slug) {
 export function getCategories() {
     return currentCategories;
 }
+
+/**
+ * Build category hierarchy (parent-child tree)
+ * @param {Array} categories - Flat list of categories
+ * @returns {Array} - Hierarchical tree structure
+ */
+export function buildCategoryTree(categories) {
+    const categoryMap = {};
+    const tree = [];
+
+    // Create map for quick lookup
+    categories.forEach(cat => {
+        categoryMap[cat.id] = { ...cat, children: [] };
+    });
+
+    // Build tree structure
+    categories.forEach(cat => {
+        if (cat.parent_id && categoryMap[cat.parent_id]) {
+            categoryMap[cat.parent_id].children.push(categoryMap[cat.id]);
+        } else {
+            tree.push(categoryMap[cat.id]);
+        }
+    });
+
+    return tree;
+}
+
+/**
+ * Get breadcrumb path for a category
+ * @param {String} categorySlug - Category slug to find path for
+ * @param {Array} categories - All categories
+ * @returns {Array} - Array of {name, slug} breadcrumb items
+ */
+export function getCategoryBreadcrumbs(categorySlug, categories) {
+    const category = categories.find(c => c.slug === categorySlug);
+    if (!category) return [];
+
+    const breadcrumbs = [];
+    let current = category;
+
+    // Walk up the parent chain
+    while (current) {
+        breadcrumbs.unshift({
+            name: current.name,
+            slug: current.slug,
+            id: current.id
+        });
+
+        if (current.parent_id) {
+            current = categories.find(c => c.id === current.parent_id);
+        } else {
+            current = null;
+        }
+    }
+
+    return breadcrumbs;
+}
+
+/**
+ * Render category breadcrumbs
+ * @param {String} categorySlug - Selected category slug
+ * @param {Array} categories - All categories
+ * @param {Function} onBreadcrumbClick - Callback when breadcrumb is clicked
+ * @returns {HTMLElement} - Breadcrumb container
+ */
+export function renderCategoryBreadcrumbs(categorySlug, categories, onBreadcrumbClick) {
+    const container = document.createElement('div');
+    container.className = 'category-breadcrumbs';
+
+    if (!categorySlug) {
+        container.style.display = 'none';
+        return container;
+    }
+
+    const breadcrumbs = getCategoryBreadcrumbs(categorySlug, categories);
+
+    if (breadcrumbs.length === 0) {
+        container.style.display = 'none';
+        return container;
+    }
+
+    // Add "All" link at the start
+    const allLink = document.createElement('span');
+    allLink.className = 'breadcrumb-item clickable';
+    allLink.textContent = 'All';
+    allLink.onclick = () => onBreadcrumbClick(null);
+    container.appendChild(allLink);
+
+    // Add separator
+    const separator = document.createElement('span');
+    separator.className = 'breadcrumb-separator';
+    separator.textContent = '›';
+    container.appendChild(separator);
+
+    // Add breadcrumb items
+    breadcrumbs.forEach((crumb, index) => {
+        const isLast = index === breadcrumbs.length - 1;
+
+        const item = document.createElement('span');
+        item.className = isLast ? 'breadcrumb-item active' : 'breadcrumb-item clickable';
+        item.textContent = crumb.name;
+
+        if (!isLast) {
+            item.onclick = () => onBreadcrumbClick(crumb.slug);
+        }
+
+        container.appendChild(item);
+
+        // Add separator if not last
+        if (!isLast) {
+            const sep = document.createElement('span');
+            sep.className = 'breadcrumb-separator';
+            sep.textContent = '›';
+            container.appendChild(sep);
+        }
+    });
+
+    return container;
+}
+
+/**
+ * Render hierarchical category list in bottom sheet
+ * @param {Array} categories - All categories
+ * @param {Function} onCategorySelect - Callback when category is selected
+ */
+export function renderHierarchicalCategoryList(categories, onCategorySelect) {
+    const listContainer = document.getElementById('category-list');
+    if (!listContainer) return;
+
+    listContainer.innerHTML = '';
+
+    const tree = buildCategoryTree(categories);
+
+    function renderNode(node, level = 0) {
+        const item = document.createElement('div');
+        item.className = 'category-item';
+        item.style.paddingLeft = `${16 + level * 20}px`;
+
+        if (selectedCategorySlug === node.slug) {
+            item.classList.add('selected');
+        }
+
+        const content = document.createElement('div');
+        content.className = 'category-item-content';
+
+        // Add expand icon if has children
+        if (node.children && node.children.length > 0) {
+            const expandIcon = document.createElement('span');
+            expandIcon.className = 'category-expand-icon';
+            expandIcon.textContent = '›';
+            content.appendChild(expandIcon);
+        }
+
+        const name = document.createElement('span');
+        name.className = 'category-name';
+        name.textContent = node.name;
+        content.appendChild(name);
+
+        const count = document.createElement('span');
+        count.className = 'category-item-count';
+        count.textContent = node.product_count || 0;
+        content.appendChild(count);
+
+        item.appendChild(content);
+
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (selectedCategorySlug === node.slug) {
+                selectedCategorySlug = null;
+            } else {
+                selectedCategorySlug = node.slug;
+            }
+            onCategorySelect(selectedCategorySlug);
+            closeBottomSheet();
+            updateChipsActiveState();
+        });
+
+        listContainer.appendChild(item);
+
+        // Render children
+        if (node.children && node.children.length > 0) {
+            node.children.forEach(child => renderNode(child, level + 1));
+        }
+    }
+
+    tree.forEach(node => renderNode(node, 0));
+}

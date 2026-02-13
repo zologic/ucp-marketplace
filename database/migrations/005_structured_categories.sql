@@ -59,7 +59,9 @@ CREATE TABLE IF NOT EXISTS merchant_categories (
     slug VARCHAR(255) NOT NULL,
     parent_external_id VARCHAR(255), -- Parent category ID from merchant's system
     google_taxonomy_id VARCHAR(50),
+    google_taxonomy_path TEXT, -- Full path from Google Taxonomy
     description TEXT,
+    image_url TEXT, -- Category image URL
     product_count INTEGER DEFAULT 0,
     last_synced_at TIMESTAMP DEFAULT NOW(),
     created_at TIMESTAMP DEFAULT NOW(),
