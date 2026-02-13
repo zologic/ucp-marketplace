@@ -409,13 +409,28 @@ else
     docker compose logs api | grep -i migration | tail -10
 fi
 
-# Check if default tenant exists
-TENANT_CHECK=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c "SELECT COUNT(*) FROM tenants;" 2>&1 || echo "0")
+# Ensure tenant exists with correct domain
+echo "Configuring tenant for domain: $DOMAIN"
+docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" > /dev/null 2>&1 << EOF
+-- Update or insert tenant with the configured domain
+INSERT INTO tenants (name, domain, status)
+SELECT '${TENANT_NAME}', '${DOMAIN}', 'active'
+WHERE NOT EXISTS (SELECT 1 FROM tenants WHERE domain = '${DOMAIN}')
+ON CONFLICT (domain) DO UPDATE SET name = EXCLUDED.name;
+
+-- Ensure tenant revenue configuration exists
+INSERT INTO tenant_revenue (tenant_id, revenue_share_percent, applies_to, status)
+SELECT id, 80, 'both', 'active'
+FROM tenants WHERE domain = '${DOMAIN}'
+ON CONFLICT (tenant_id) DO NOTHING;
+EOF
+
+TENANT_CHECK=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c "SELECT COUNT(*) FROM tenants WHERE domain = '${DOMAIN}';" 2>&1 || echo "0")
 
 if [ "$TENANT_CHECK" -gt "0" ]; then
-    echo -e "${GREEN}✓ Default tenant created${NC}"
+    echo -e "${GREEN}✓ Tenant configured for domain: ${DOMAIN}${NC}"
 else
-    echo -e "${RED}✗ Tenant table not found${NC}"
+    echo -e "${RED}✗ Failed to create tenant${NC}"
     echo "Database may not be fully initialized"
 fi
 
