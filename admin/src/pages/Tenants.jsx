@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Button from '../components/Button.jsx';
 import Input from '../components/Input.jsx';
 import Modal from '../components/Modal.jsx';
+import SlidePanel from '../components/SlidePanel.jsx';
 import Table from '../components/Table.jsx';
 import {
   getTenants,
@@ -335,7 +336,7 @@ function Tenants() {
             </select>
           </div>
         </form>
-      </Modal>
+      </SlidePanel>
 
       {/* Tenant Details Modal */}
       <Modal
@@ -454,7 +455,7 @@ function Tenants() {
             )}
           </div>
         )}
-      </Modal>
+      </SlidePanel>
 
       {/* Edit Tenant Modal */}
       <Modal
@@ -528,7 +529,7 @@ function Tenants() {
             </select>
           </div>
         </form>
-      </Modal>
+      </SlidePanel>
     </div>
   );
 }
