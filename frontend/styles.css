@@ -531,8 +531,8 @@ body {
 }
 
 .variation-option.selected {
-    border-color: #333;
-    background: #333;
+    border-color: #2ea043;
+    background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
     color: #fff;
     font-weight: 600;
 }
@@ -565,8 +565,8 @@ body {
     }
 
     .variation-option.selected {
-        border-color: #000;
-        background: #000;
+        border-color: #2ea043;
+        background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
         font-weight: 700;
     }
 
