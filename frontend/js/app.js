@@ -3,7 +3,7 @@
  * Initializes the shopping interface and handles search events
  */
 
-import { handleSearch, handleSearchWithCategory } from './search.js';
+import { handleSearch, handleSearchWithCategory, initializeFilters } from './search.js';
 import { renderError, clearError } from './ui.js';
 import { initVoiceSearch } from './voice-search.js';
 import {
@@ -196,6 +196,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (backdrop) {
         backdrop.addEventListener('click', closeBottomSheet);
     }
+
+    // Initialize filters
+    initializeFilters();
 
     // Global error handler
     window.addEventListener('error', (e) => {
