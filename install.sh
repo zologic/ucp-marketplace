@@ -99,6 +99,17 @@ if [ ! -f .env ]; then
     read -p "Database name [ucpready]: " POSTGRES_DB
     POSTGRES_DB=${POSTGRES_DB:-ucpready}
 
+    # Admin email (for Let's Encrypt SSL certificates if using production domain)
+    if [ "$DOMAIN" != "localhost" ]; then
+        read -p "Admin email (for SSL certificates): " SSL_EMAIL
+        while [ -z "$SSL_EMAIL" ]; do
+            echo "Email is required for SSL certificates"
+            read -p "Admin email (for SSL certificates): " SSL_EMAIL
+        done
+    else
+        SSL_EMAIL=""
+    fi
+
     # Database user (always postgres for Docker)
     POSTGRES_USER=postgres
 
@@ -120,6 +131,7 @@ if [ ! -f .env ]; then
 
 # Domain
 DOMAIN=${DOMAIN}
+SSL_EMAIL=${SSL_EMAIL}
 
 # Tenant Configuration
 TENANT_NAME=${TENANT_NAME}
@@ -189,8 +201,9 @@ echo ""
 
 echo -e "${YELLOW}[4/8] Configuring reverse proxy...${NC}"
 
-# Load env vars safely (only get DOMAIN)
+# Load env vars safely
 DOMAIN=$(grep "^DOMAIN=" .env | cut -d'=' -f2-)
+SSL_EMAIL=$(grep "^SSL_EMAIL=" .env | cut -d'=' -f2-)
 
 # Generate Caddyfile based on domain
 if [ "$DOMAIN" = "localhost" ]; then
@@ -241,8 +254,8 @@ else
 # Auto-generated Caddyfile - Do not edit manually
 
 ${DOMAIN} {
-    # Enable automatic HTTPS
-    tls {
+    # Enable automatic HTTPS with Let's Encrypt
+    tls ${SSL_EMAIL} {
         protocols tls1.2 tls1.3
     }
 
