@@ -80,14 +80,12 @@ async function indexProducts(db) {
                 logId = logResult.rows[0].id;
 
                 // Fetch products from merchant using dynamic endpoint
+                // Don't send limit parameter - let merchant use their default
                 const productsResponse = await axios.get(productsEndpoint, {
-                    timeout: 30000,
-                    params: {
-                        limit: 1000  // Limit per request
-                    }
+                    timeout: 30000
                 });
 
-                const products = productsResponse.data.products || [];
+                const products = productsResponse.data.data || productsResponse.data.products || [];
 
                 // Upsert products into database with signing_status = 'pending'
                 for (const product of products) {
@@ -274,6 +272,10 @@ async function indexProducts(db) {
 
             } catch (error) {
                 console.error(`[indexProducts] ✗ ${merchant.domain}: ${error.message}`);
+                if (error.response) {
+                    console.error(`[indexProducts] Response status: ${error.response.status}`);
+                    console.error(`[indexProducts] Response data:`, error.response.data);
+                }
 
                 // Determine error code
                 const errorCode = getErrorCode(error);
