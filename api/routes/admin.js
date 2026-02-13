@@ -1446,6 +1446,8 @@ router.delete('/tenants/:id', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
 
+        console.log('[Delete Tenant] Request from admin:', req.admin?.id, 'role:', req.admin?.role);
+
         // Check for merchants
         const merchantCheck = await req.app.locals.db.query(
             'SELECT COUNT(*) as count FROM merchants WHERE tenant_id = $1',
