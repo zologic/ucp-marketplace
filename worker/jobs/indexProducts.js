@@ -92,9 +92,6 @@ async function indexProducts(db) {
                 // - Standard UCP: { products: [...] }
                 const products = productsResponse.data.data || productsResponse.data.products || [];
 
-                // Sync categories from merchant (optional, non-blocking)
-                await syncMerchantCategories(db, merchant);
-
                 // Upsert products into database with signing_status = 'pending'
                 for (const product of products) {
                     try {
@@ -222,7 +219,7 @@ async function indexProducts(db) {
 
                         // Link product to categories if provided in UCP response
                         if (product.categories && Array.isArray(product.categories)) {
-                            await linkProductCategories(db, productId, merchant.tenant_id, product.categories);
+                            await linkProductCategories(db, productId, merchant.id, merchant.tenant_id, product.categories);
                         }
 
                         productsIndexed++;
@@ -420,122 +417,86 @@ function transformUCP2026Variations(ucpVariations, basePrice) {
 }
 
 /**
- * Fetch and sync categories from merchant's UCP categories endpoint
+ * Extract and link product categories from product data
+ * Categories come from product.categories[] in UCP response
+ *
+ * Example input:
+ * product.categories = [
+ *   {
+ *     id: "18",
+ *     name: "Electronics",
+ *     slug: "electronics",
+ *     google_taxonomy_id: "222",
+ *     google_taxonomy_path: "Electronics"
+ *   }
+ * ]
  */
-async function syncMerchantCategories(db, merchant) {
-    try {
-        const categoriesEndpoint = `${merchant.service_base_url}/wp-json/ucpready/v1/categories`;
-        console.log(`[syncCategories] Fetching from: ${categoriesEndpoint}`);
-
-        const response = await axios.get(categoriesEndpoint, { timeout: 15000 });
-        const categories = response.data.data || response.data.categories || response.data || [];
-
-        if (!Array.isArray(categories) || categories.length === 0) {
-            console.log(`[syncCategories] No categories found for ${merchant.domain}`);
-            return 0;
-        }
-
-        let syncedCount = 0;
-
-        for (const category of categories) {
-            try {
-                const slug = category.slug || category.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-
-                // Upsert into merchant_categories
-                await db.query(`
-                    INSERT INTO merchant_categories (
-                        merchant_id, external_id, name, slug,
-                        parent_external_id, google_taxonomy_id,
-                        description, product_count, last_synced_at
-                    )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-                    ON CONFLICT (merchant_id, slug)
-                    DO UPDATE SET
-                        external_id = EXCLUDED.external_id,
-                        name = EXCLUDED.name,
-                        parent_external_id = EXCLUDED.parent_external_id,
-                        google_taxonomy_id = EXCLUDED.google_taxonomy_id,
-                        description = EXCLUDED.description,
-                        product_count = EXCLUDED.product_count,
-                        last_synced_at = NOW()
-                `, [
-                    merchant.id,
-                    category.id || category.external_id || null,
-                    category.name,
-                    slug,
-                    category.parent_id || category.parent || null,
-                    category.google_taxonomy_id || null,
-                    category.description || null,
-                    category.product_count || category.count || 0
-                ]);
-
-                // Also upsert into normalized categories table
-                await db.query(`
-                    INSERT INTO categories (
-                        tenant_id, name, slug,
-                        google_taxonomy_id, google_taxonomy_path,
-                        description
-                    )
-                    VALUES ($1, $2, $3, $4, $5, $6)
-                    ON CONFLICT (tenant_id, slug)
-                    DO UPDATE SET
-                        google_taxonomy_id = COALESCE(EXCLUDED.google_taxonomy_id, categories.google_taxonomy_id),
-                        google_taxonomy_path = COALESCE(EXCLUDED.google_taxonomy_path, categories.google_taxonomy_path),
-                        description = COALESCE(EXCLUDED.description, categories.description),
-                        updated_at = NOW()
-                `, [
-                    merchant.tenant_id,
-                    category.name,
-                    slug,
-                    category.google_taxonomy_id || null,
-                    category.google_taxonomy_path || null,
-                    category.description || null
-                ]);
-
-                syncedCount++;
-            } catch (catError) {
-                console.warn(`[syncCategories] Failed to sync category ${category.name}:`, catError.message);
-            }
-        }
-
-        console.log(`[syncCategories] ✓ ${merchant.domain}: ${syncedCount} categories synced`);
-        return syncedCount;
-
-    } catch (error) {
-        // Categories endpoint is optional, don't fail the whole indexing
-        if (error.response && error.response.status === 404) {
-            console.log(`[syncCategories] Categories endpoint not found for ${merchant.domain} (optional)`);
-        } else {
-            console.warn(`[syncCategories] Failed to fetch categories for ${merchant.domain}:`, error.message);
-        }
-        return 0;
-    }
-}
-
-/**
- * Link product to categories based on category data from UCP
- */
-async function linkProductCategories(db, productId, tenantId, categoryData) {
+async function linkProductCategories(db, productId, merchantId, tenantId, categoryData) {
     try {
         if (!categoryData || !Array.isArray(categoryData) || categoryData.length === 0) {
             return;
         }
 
         for (const cat of categoryData) {
-            const categoryName = cat.name || cat;
-            const categorySlug = (cat.slug || categoryName).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            if (!cat.name) continue;
 
-            // Ensure category exists in normalized table
+            const categorySlug = cat.slug || cat.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+            // Step 1: Store merchant's category mapping (for tracking external IDs)
+            await db.query(`
+                INSERT INTO merchant_categories (
+                    merchant_id, external_id, name, slug,
+                    parent_external_id, google_taxonomy_id, google_taxonomy_path,
+                    description, last_synced_at
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+                ON CONFLICT (merchant_id, slug)
+                DO UPDATE SET
+                    external_id = EXCLUDED.external_id,
+                    name = EXCLUDED.name,
+                    parent_external_id = EXCLUDED.parent_external_id,
+                    google_taxonomy_id = COALESCE(EXCLUDED.google_taxonomy_id, merchant_categories.google_taxonomy_id),
+                    google_taxonomy_path = COALESCE(EXCLUDED.google_taxonomy_path, merchant_categories.google_taxonomy_path),
+                    description = COALESCE(EXCLUDED.description, merchant_categories.description),
+                    last_synced_at = NOW()
+            `, [
+                merchantId,
+                cat.id || null,
+                cat.name,
+                categorySlug,
+                cat.parent_id || cat.parent || null,
+                cat.google_taxonomy_id || null,
+                cat.google_taxonomy_path || null,
+                cat.description || null
+            ]);
+
+            // Step 2: Create/update normalized tenant category
             const catResult = await db.query(`
-                INSERT INTO categories (tenant_id, name, slug, google_taxonomy_id)
-                VALUES ($1, $2, $3, $4)
-                ON CONFLICT (tenant_id, slug) DO UPDATE SET updated_at = NOW()
+                INSERT INTO categories (
+                    tenant_id, name, slug,
+                    google_taxonomy_id, google_taxonomy_path,
+                    description
+                )
+                VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT (tenant_id, slug)
+                DO UPDATE SET
+                    google_taxonomy_id = COALESCE(EXCLUDED.google_taxonomy_id, categories.google_taxonomy_id),
+                    google_taxonomy_path = COALESCE(EXCLUDED.google_taxonomy_path, categories.google_taxonomy_path),
+                    description = COALESCE(EXCLUDED.description, categories.description),
+                    updated_at = NOW()
                 RETURNING id
-            `, [tenantId, categoryName, categorySlug, cat.google_taxonomy_id || null]);
+            `, [
+                tenantId,
+                cat.name,
+                categorySlug,
+                cat.google_taxonomy_id || null,
+                cat.google_taxonomy_path || null,
+                cat.description || null
+            ]);
 
             const categoryId = catResult.rows[0].id;
 
-            // Link product to category
+            // Step 3: Link product to normalized category
             await db.query(`
                 INSERT INTO product_categories (product_id, category_id)
                 VALUES ($1, $2)
