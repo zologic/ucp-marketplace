@@ -98,7 +98,7 @@ router.post('/search', async (req, res) => {
             LEFT JOIN merchant_billing mb ON m.id = mb.merchant_id
             WHERE m.tenant_id = $1
               AND m.status = 'active'
-              AND (mb.status != 'suspended' OR m.admin_override = true)
+              AND (mb.status IS NULL OR mb.status != 'suspended' OR m.admin_override = true)
         `, [tenantId]);
 
         const merchants = merchantsResult.rows;
