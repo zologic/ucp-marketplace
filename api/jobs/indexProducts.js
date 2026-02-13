@@ -87,9 +87,12 @@ async function indexProducts(db) {
 
                 const products = productsResponse.data.data || productsResponse.data.products || [];
 
-                // First, process and create categories with full metadata from UCP
+                // First, process and create categories and brands with full metadata from UCP
                 const categoryMap = new Map(); // slug -> category data
+                const brandMap = new Map(); // slug -> brand data
+
                 for (const product of products) {
+                    // Extract categories
                     if (product.categories && Array.isArray(product.categories)) {
                         for (const cat of product.categories) {
                             if (cat.slug && !categoryMap.has(cat.slug)) {
@@ -102,6 +105,17 @@ async function indexProducts(db) {
                                     image_url: cat.image_url || null
                                 });
                             }
+                        }
+                    }
+
+                    // Extract brands
+                    if (product.brand) {
+                        const brandSlug = product.brand.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+                        if (!brandMap.has(brandSlug)) {
+                            brandMap.set(brandSlug, {
+                                name: product.brand,
+                                slug: brandSlug
+                            });
                         }
                     }
                 }
@@ -138,6 +152,29 @@ async function indexProducts(db) {
                 }
 
                 console.log(`[indexProducts] ${merchant.domain}: Processed ${categoryMap.size} categories with metadata`);
+
+                // Bulk upsert brands
+                for (const [slug, brandData] of brandMap) {
+                    try {
+                        await db.query(`
+                            INSERT INTO brands (
+                                tenant_id, name, slug, is_active
+                            )
+                            VALUES ($1, $2, $3, true)
+                            ON CONFLICT (tenant_id, slug) DO UPDATE SET
+                                name = EXCLUDED.name,
+                                updated_at = NOW()
+                        `, [
+                            merchant.tenant_id,
+                            brandData.name,
+                            brandData.slug
+                        ]);
+                    } catch (brandError) {
+                        console.warn(`[indexProducts] Failed to upsert brand ${brandData.name}:`, brandError.message);
+                    }
+                }
+
+                console.log(`[indexProducts] ${merchant.domain}: Processed ${brandMap.size} brands`);
 
                 // Upsert products into database with signing_status = 'pending'
                 for (const product of products) {
@@ -265,6 +302,23 @@ async function indexProducts(db) {
                             }
                         }
 
+                        // Link product to brand
+                        if (product.brand) {
+                            const brandSlug = product.brand.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+                            try {
+                                await db.query(`
+                                    INSERT INTO product_brands (product_id, brand_id)
+                                    SELECT p.id, b.id
+                                    FROM products p
+                                    JOIN brands b ON b.tenant_id = p.tenant_id AND b.slug = $1
+                                    WHERE p.merchant_id = $2 AND p.external_id = $3
+                                    ON CONFLICT (product_id, brand_id) DO NOTHING
+                                `, [brandSlug, merchant.id, product.id]);
+                            } catch (linkError) {
+                                console.warn(`[indexProducts] Failed to link product ${product.id} to brand ${brandSlug}:`, linkError.message);
+                            }
+                        }
+
                         productsIndexed++;
                         totalIndexed++;
                     } catch (productError) {
@@ -299,6 +353,19 @@ async function indexProducts(db) {
                 `, [merchant.id]);
 
                 console.log(`[indexProducts] Search vectors updated for ${merchant.domain}`);
+
+                // Update brand product counts
+                await db.query(`
+                    UPDATE brands b
+                    SET product_count = (
+                        SELECT COUNT(*)
+                        FROM product_brands pb
+                        JOIN products p ON p.id = pb.product_id
+                        WHERE pb.brand_id = b.id
+                          AND p.merchant_id = $1
+                    )
+                    WHERE b.tenant_id = $2
+                `, [merchant.id, merchant.tenant_id]);
 
                 // Mark old products as out of stock (not seen in last 7 days)
                 await db.query(`
