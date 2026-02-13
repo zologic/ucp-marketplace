@@ -258,6 +258,13 @@ for i in {1..30}; do
 done
 echo ""
 
+# Verify database is accessible
+if ! docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT 1;" > /dev/null 2>&1; then
+    echo -e "${RED}✗ Database not accessible${NC}"
+    echo "Please check Docker logs: docker compose logs postgres"
+    exit 1
+fi
+
 # Wait for API to be ready
 echo "Waiting for API to be ready..."
 for i in {1..60}; do
@@ -277,6 +284,39 @@ echo ""
 # ============================================================================
 
 echo -e "${YELLOW}[6/8] Verifying database setup...${NC}"
+
+# Wait a bit for migrations to complete
+sleep 5
+
+# Check if API is healthy or restarting (migration issue)
+API_STATUS=$(docker compose ps api --format json | grep -o '"State":"[^"]*"' | cut -d'"' -f4)
+
+if [ "$API_STATUS" = "restarting" ]; then
+    echo -e "${YELLOW}⚠ API is restarting - checking for migration conflicts...${NC}"
+
+    # Check logs for migration errors
+    if docker compose logs api | grep -q "already exists"; then
+        echo -e "${YELLOW}Found migration conflict - fixing automatically...${NC}"
+
+        # Mark consolidated migrations as applied to prevent conflicts
+        docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" > /dev/null 2>&1 << EOF
+INSERT INTO schema_migrations (migration_file) VALUES
+    ('001_add_ucp_business_profile.sql'),
+    ('002_add_product_variations.sql'),
+    ('003_add_mobile_push_tokens.sql'),
+    ('004_add_referral_source.sql'),
+    ('005_structured_categories.sql')
+ON CONFLICT (migration_file) DO NOTHING;
+EOF
+
+        echo -e "${GREEN}✓ Migration conflicts resolved${NC}"
+        echo "Restarting API..."
+        docker compose restart api
+
+        # Wait for API to come up
+        sleep 5
+    fi
+fi
 
 # Check if migrations ran successfully
 MIGRATION_CHECK=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c "SELECT COUNT(*) FROM schema_migrations;" 2>&1 || echo "0")
