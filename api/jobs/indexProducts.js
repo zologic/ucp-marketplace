@@ -92,6 +92,36 @@ async function indexProducts(db) {
                 // Upsert products into database with signing_status = 'pending'
                 for (const product of products) {
                     try {
+                        // Process price - support both UCP 2026 format and legacy
+                        let priceCents = product.price_cents;
+                        let currency = product.currency || 'EUR';
+                        if (!priceCents && product.price && product.price.amount) {
+                            priceCents = product.price.amount;
+                            currency = product.price.currency || 'EUR';
+                        }
+
+                        // Process categories - support UCP 2026 format (array) and legacy (string)
+                        let categoryName = null;
+                        if (product.categories && Array.isArray(product.categories) && product.categories.length > 0) {
+                            // Use first category name from array
+                            categoryName = product.categories[0].name;
+                        } else if (product.category) {
+                            // Legacy format: single category string
+                            categoryName = product.category;
+                        }
+
+                        // Process images - support UCP 2026 format (array) and legacy (single url)
+                        let imageUrl = product.image_url;
+                        if (!imageUrl && product.images && Array.isArray(product.images) && product.images.length > 0) {
+                            imageUrl = product.images[0].url;
+                        }
+
+                        // Process stock status - support both formats
+                        let stockStatus = product.stock_status || 'in_stock';
+                        if (product.in_stock !== undefined) {
+                            stockStatus = product.in_stock ? 'in_stock' : 'out_of_stock';
+                        }
+
                         // Process description fields
                         const descriptionShort = product.description_short ||
                             (product.description ? product.description.substring(0, 150) + (product.description.length > 150 ? '...' : '') : null);
@@ -110,7 +140,7 @@ async function indexProducts(db) {
 
                                 if (isUCP2026Format) {
                                     // Transform UCP 2026 format to internal format
-                                    variations = transformUCP2026Variations(product.variations, product.price_cents || 0);
+                                    variations = transformUCP2026Variations(product.variations, priceCents || 0);
                                     hasVariations = variations.length > 0;
                                 } else {
                                     // Legacy format: array with {attribute, options}
@@ -157,12 +187,12 @@ async function indexProducts(db) {
                             descriptionLong,
                             JSON.stringify(variations),
                             hasVariations,
-                            product.price_cents,
-                            product.currency || 'EUR',
-                            product.category || null,
+                            priceCents,
+                            currency,
+                            categoryName,
                             product.brand || null,
-                            product.image_url || null,
-                            product.stock_status || 'in_stock'
+                            imageUrl,
+                            stockStatus
                         ]);
 
                         productsIndexed++;
@@ -348,8 +378,20 @@ function transformUCP2026Variations(ucpVariations, basePrice) {
     for (const variation of ucpVariations) {
         if (!variation.attributes) continue;
 
-        const variationPrice = variation.price || basePrice;
+        // Handle both UCP 2026 format {price: {amount: 1000}} and legacy format {price: 1000}
+        let variationPrice = basePrice;
+        if (variation.price) {
+            variationPrice = variation.price.amount || variation.price;
+        }
         const priceModifier = variationPrice - basePrice;
+
+        // Handle stock status - support both in_stock (boolean) and stock_status (string)
+        let isAvailable = true;
+        if (variation.stock_status) {
+            isAvailable = variation.stock_status !== 'out_of_stock';
+        } else if (variation.in_stock !== undefined) {
+            isAvailable = variation.in_stock;
+        }
 
         // Extract each attribute (color, size, etc.)
         for (const [attrKey, attrValue] of Object.entries(variation.attributes)) {
@@ -366,7 +408,7 @@ function transformUCP2026Variations(ucpVariations, basePrice) {
             if (!existingOption) {
                 attributeGroups[attrKey].options.push({
                     value: String(attrValue),
-                    available: variation.stock_status !== 'out_of_stock',
+                    available: isAvailable,
                     price_modifier_cents: priceModifier,
                     variation_id: variation.id // Store UCP variation ID for checkout
                 });
