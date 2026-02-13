@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
-# Add security updates
-RUN apk update && apk upgrade
+# Add security updates and required tools
+RUN apk update && apk upgrade && apk add --no-cache netcat-openbsd
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
@@ -17,19 +17,20 @@ RUN npm ci --only=production
 # Copy application code
 COPY api/ .
 
-# Copy worker code (for background jobs when RUN_WORKER=true)
-COPY worker/ /worker
-
-# Link node_modules so worker can access dependencies
-RUN ln -s /app/node_modules /worker/node_modules
+# Copy worker code into /app/worker (for background jobs when RUN_WORKER=true)
+COPY worker/ ./worker
 
 # Copy database migrations to /database and scripts to /app
 COPY --chown=nodejs:nodejs database/ /database
 COPY --chown=nodejs:nodejs database/migrations_archive/migrate.js /app/migrate.js
 COPY --chown=nodejs:nodejs database/init-db.js /app/init-db.js
 
+# Copy startup script
+COPY --chown=nodejs:nodejs api/start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 # Change ownership to non-root user
-RUN chown -R nodejs:nodejs /app /worker
+RUN chown -R nodejs:nodejs /app
 
 # Switch to non-root user
 USER nodejs
@@ -41,5 +42,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
   CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# Start server
-CMD ["node", "server.js"]
+# Start server with initialization
+CMD ["sh", "/app/start.sh"]
