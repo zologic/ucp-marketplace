@@ -1442,7 +1442,7 @@ router.patch('/tenants/:id', requireAuth, async (req, res) => {
 });
 
 // DELETE /admin/tenants/:id - Delete tenant
-router.delete('/tenants/:id', requireSuperAdmin, async (req, res) => {
+router.delete('/tenants/:id', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
 
