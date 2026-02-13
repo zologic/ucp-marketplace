@@ -8,6 +8,7 @@ const router = express.Router();
 const axios = require('axios');
 const crypto = require('crypto');
 const { rankProducts, getCategoryWeights } = require('../services/ranking');
+const { parseQuery, generateFilterLabels } = require('../services/queryParser');
 
 // Import onboarding routes
 const onboardRoutes = require('./onboard');
@@ -84,8 +85,11 @@ router.post('/search', async (req, res) => {
             return res.status(400).json({ error: 'Query is required' });
         }
 
-        // Extract intent from query (simple keyword extraction)
-        const intent = extractIntent(query, filters);
+        // Parse query with smart NLP/pattern matching
+        const parsed = parseQuery(query, filters);
+
+        // Extract intent from cleaned query
+        const intent = extractIntent(parsed.clean_query, parsed.filters);
 
         // Get active merchants for this tenant
         const merchantsResult = await req.app.locals.db.query(`
@@ -160,6 +164,16 @@ router.post('/search', async (req, res) => {
             paramIndex++;
         }
 
+        if (intent.min_price_cents) {
+            searchQuery += ` AND p.price_cents >= $${paramIndex}`;
+            queryParams.push(intent.min_price_cents);
+            paramIndex++;
+        }
+
+        if (intent.in_stock_only) {
+            searchQuery += ` AND p.stock_status = 'in_stock'`;
+        }
+
         // Group by to collapse daily stats into totals
         searchQuery += ` GROUP BY p.id, m.id, m.trust_score, t.name`;
 
@@ -190,6 +204,9 @@ router.post('/search', async (req, res) => {
             `, [tenantId, product.merchant_id, product.id, intentHash, intent.category, intent.brand, intent.max_price_cents, intent.currency]);
         }
 
+        // Generate filter labels for UI
+        const filterLabels = generateFilterLabels(parsed.filters);
+
         res.json({
             results: topResults.map(p => ({
                 id: p.id,
@@ -204,7 +221,10 @@ router.post('/search', async (req, res) => {
                 image_url: p.image_url,
                 stock_status: p.stock_status
             })),
-            count: topResults.length
+            count: topResults.length,
+            filter_labels: filterLabels,
+            applied_filters: parsed.filters,
+            clean_query: parsed.clean_query
         });
     } catch (error) {
         console.error('Search error:', error);
