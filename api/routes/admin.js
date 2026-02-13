@@ -152,15 +152,12 @@ router.post('/merchants', requireAuth, async (req, res) => {
             return res.status(400).json({ error: 'domain is required' });
         }
 
-        // Auto-detect tenant_id if not provided (use first active tenant)
+        // Require tenant_id to be explicitly provided
         if (!tenant_id) {
-            const tenantResult = await req.app.locals.db.query(
-                "SELECT id FROM tenants WHERE status = 'active' ORDER BY created_at LIMIT 1"
-            );
-            if (tenantResult.rows.length === 0) {
-                return res.status(500).json({ error: 'No active tenant found' });
-            }
-            tenant_id = tenantResult.rows[0].id;
+            return res.status(400).json({
+                error: 'tenant_id is required',
+                message: 'Please select a tenant for this merchant in the admin UI'
+            });
         }
 
         // Normalize domain
