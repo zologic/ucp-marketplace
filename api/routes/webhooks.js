@@ -24,10 +24,19 @@ const mailTransport = nodemailer.createTransport({
 // POST /api/webhooks/order-completed - Handle order completion webhook
 router.post('/order-completed', async (req, res) => {
     try {
-        const { order_id, merchant_domain, referral_id, total_cents, currency, signature } = req.body;
+        // UCP 2026: Signature in Request-Signature header (JWT)
+        // Legacy: Signature in request body
+        const requestSignatureHeader = req.get('Request-Signature');
+        const bodySignature = req.body.signature;
 
-        if (!order_id || !merchant_domain || !referral_id || !total_cents || !signature) {
+        const { order_id, merchant_domain, referral_id, total_cents, currency } = req.body;
+
+        if (!order_id || !merchant_domain || !referral_id || !total_cents) {
             return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        if (!requestSignatureHeader && !bodySignature) {
+            return res.status(400).json({ error: 'Missing signature (Request-Signature header or body.signature)' });
         }
 
         const tenantId = req.tenant.id;
@@ -50,11 +59,25 @@ router.post('/order-completed', async (req, res) => {
             return res.status(400).json({ error: 'Merchant not verified' });
         }
 
-        const isValid = verifySignature(
-            { order_id, referral_id, total_cents, currency },
-            signature,
-            merchant.public_key
-        );
+        // UCP 2026: Verify JWT signature from header
+        let isValid = false;
+        if (requestSignatureHeader) {
+            isValid = verifyJwtSignature(
+                JSON.stringify(req.body),
+                requestSignatureHeader,
+                merchant.public_key,
+                merchant.ucp_manifest
+            );
+        }
+
+        // Legacy: Verify plain Ed25519 signature from body
+        if (!isValid && bodySignature) {
+            isValid = verifySignature(
+                { order_id, referral_id, total_cents, currency },
+                bodySignature,
+                merchant.public_key
+            );
+        }
 
         if (!isValid) {
             console.error('Invalid webhook signature');
@@ -232,7 +255,52 @@ router.post('/order-completed', async (req, res) => {
     }
 });
 
-// Helper function: Verify Ed25519 signature
+// Helper function: Verify UCP 2026 JWT signature (RFC 7797 detached JWT)
+function verifyJwtSignature(requestBody, jwtToken, publicKeyBase64, ucpManifest) {
+    try {
+        // Parse JWT (format: header.payload.signature or header..signature for detached)
+        const parts = jwtToken.split('.');
+        if (parts.length !== 3) {
+            console.error('Invalid JWT format');
+            return false;
+        }
+
+        const [headerB64, payloadB64, signatureB64] = parts;
+
+        // Decode header to get kid (key ID)
+        const header = JSON.parse(Buffer.from(headerB64, 'base64').toString('utf8'));
+        const kid = header.kid;
+
+        // Find the correct signing key from manifest
+        let signingKey = null;
+        if (ucpManifest && ucpManifest.signing_keys) {
+            signingKey = ucpManifest.signing_keys.find(key => key.kid === kid);
+        }
+
+        // Fallback to default public key if kid not found
+        const publicKey = signingKey ? signingKey.x : publicKeyBase64;
+
+        // For detached JWT (RFC 7797), payload is empty and body is signed
+        const messageToVerify = payloadB64 === ''
+            ? `${headerB64}..${signatureB64}` // Detached: header..signature
+            : jwtToken; // Regular JWT
+
+        // Convert signature and public key
+        const signatureBytes = util.decodeBase64(signatureB64.replace(/-/g, '+').replace(/_/g, '/'));
+        const publicKeyBytes = util.decodeBase64(publicKey);
+
+        // Message to sign: for detached JWT, it's the request body
+        const bodyBytes = util.decodeUTF8(requestBody);
+
+        // Verify Ed25519 signature
+        return nacl.sign.detached.verify(bodyBytes, signatureBytes, publicKeyBytes);
+    } catch (error) {
+        console.error('JWT signature verification error:', error);
+        return false;
+    }
+}
+
+// Helper function: Verify Ed25519 signature (legacy format)
 function verifySignature(payload, signature, publicKeyBase64) {
     try {
         // Create canonical string from payload
