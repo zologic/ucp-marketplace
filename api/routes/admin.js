@@ -10,6 +10,7 @@ const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const { requireAuth, requireSuperAdmin } = require('../middleware/auth');
 const { parseManifest, UcpParseError, UcpValidationError, UcpKeyError } = require('../utils/ucpParser');
+const { registerWebhookWithMerchant, unregisterWebhookFromMerchant, testWebhookDelivery } = require('../utils/webhookRegistration');
 
 const JWT_SECRET = process.env.ADMIN_JWT_SECRET;
 
@@ -234,6 +235,236 @@ router.post('/merchants/:id/verify', requireAuth, async (req, res) => {
     } catch (error) {
         console.error('Verify merchant error:', error);
         res.status(500).json({ error: 'Verification failed' });
+    }
+});
+
+// POST /admin/merchants/:id/register-webhook - Manually register webhook with merchant
+router.post('/merchants/:id/register-webhook', requireAuth, async (req, res) => {
+    try {
+        const merchantId = req.params.id;
+
+        // Fetch merchant details
+        const merchantResult = await req.app.locals.db.query(
+            'SELECT * FROM merchants WHERE id = $1',
+            [merchantId]
+        );
+
+        if (merchantResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Merchant not found' });
+        }
+
+        const merchant = merchantResult.rows[0];
+
+        // Check if merchant is verified
+        if (merchant.status !== 'verified' && merchant.status !== 'active') {
+            return res.status(400).json({
+                error: 'Merchant must be verified before webhook registration',
+                current_status: merchant.status
+            });
+        }
+
+        // Get marketplace webhook URL
+        const marketplaceWebhookUrl = process.env.MARKETPLACE_WEBHOOK_URL ||
+            `${process.env.CORS_ORIGIN || 'https://localhost'}/api/webhooks/order-completed`;
+
+        console.log(`[Manual Webhook Registration] Starting for ${merchant.domain}`);
+
+        // Attempt registration
+        const registrationResult = await registerWebhookWithMerchant(
+            merchant.domain,
+            marketplaceWebhookUrl,
+            process.env.PLATFORM_ID || 'ucp_marketplace'
+        );
+
+        if (registrationResult.success) {
+            // Update database
+            await req.app.locals.db.query(`
+                UPDATE merchants
+                SET
+                    webhook_registered = true,
+                    webhook_id = $1,
+                    webhook_registered_at = NOW(),
+                    webhook_url = $2,
+                    webhook_status = 'active',
+                    webhook_error = NULL,
+                    updated_at = NOW()
+                WHERE id = $3
+            `, [
+                registrationResult.webhook_id,
+                marketplaceWebhookUrl,
+                merchantId
+            ]);
+
+            res.json({
+                success: true,
+                merchant_id: merchantId,
+                domain: merchant.domain,
+                webhook: {
+                    id: registrationResult.webhook_id,
+                    url: marketplaceWebhookUrl,
+                    status: 'active',
+                    registered_at: registrationResult.registered_at,
+                    events: registrationResult.events
+                },
+                message: 'Webhook registered successfully'
+            });
+        } else {
+            // Update database with failure
+            await req.app.locals.db.query(`
+                UPDATE merchants
+                SET
+                    webhook_registered = false,
+                    webhook_status = 'failed',
+                    webhook_error = $1,
+                    updated_at = NOW()
+                WHERE id = $2
+            `, [
+                registrationResult.error,
+                merchantId
+            ]);
+
+            res.status(400).json({
+                success: false,
+                merchant_id: merchantId,
+                domain: merchant.domain,
+                error: registrationResult.error,
+                error_code: registrationResult.error_code,
+                details: registrationResult.details,
+                message: 'Webhook registration failed'
+            });
+        }
+    } catch (error) {
+        console.error('[Manual Webhook Registration] Error:', error);
+        res.status(500).json({
+            error: 'Failed to register webhook',
+            details: error.message
+        });
+    }
+});
+
+// DELETE /admin/merchants/:id/webhook - Unregister webhook from merchant
+router.delete('/merchants/:id/webhook', requireAuth, async (req, res) => {
+    try {
+        const merchantId = req.params.id;
+
+        // Fetch merchant details
+        const merchantResult = await req.app.locals.db.query(
+            'SELECT * FROM merchants WHERE id = $1',
+            [merchantId]
+        );
+
+        if (merchantResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Merchant not found' });
+        }
+
+        const merchant = merchantResult.rows[0];
+
+        if (!merchant.webhook_registered || !merchant.webhook_id) {
+            return res.status(400).json({
+                error: 'No webhook registered for this merchant',
+                webhook_status: merchant.webhook_status
+            });
+        }
+
+        console.log(`[Webhook Unregistration] Starting for ${merchant.domain}`);
+
+        // Attempt unregistration
+        const unregistrationResult = await unregisterWebhookFromMerchant(
+            merchant.domain,
+            merchant.webhook_id,
+            process.env.PLATFORM_ID || 'ucp_marketplace'
+        );
+
+        // Update database regardless of result
+        await req.app.locals.db.query(`
+            UPDATE merchants
+            SET
+                webhook_registered = false,
+                webhook_status = 'unregistered',
+                webhook_error = $1,
+                updated_at = NOW()
+            WHERE id = $2
+        `, [
+            unregistrationResult.success ? null : unregistrationResult.error,
+            merchantId
+        ]);
+
+        if (unregistrationResult.success) {
+            res.json({
+                success: true,
+                merchant_id: merchantId,
+                domain: merchant.domain,
+                message: 'Webhook unregistered successfully',
+                unregistered_at: unregistrationResult.unregistered_at
+            });
+        } else {
+            res.status(400).json({
+                success: false,
+                merchant_id: merchantId,
+                domain: merchant.domain,
+                error: unregistrationResult.error,
+                error_code: unregistrationResult.error_code,
+                message: 'Webhook unregistration failed (database updated)'
+            });
+        }
+    } catch (error) {
+        console.error('[Webhook Unregistration] Error:', error);
+        res.status(500).json({
+            error: 'Failed to unregister webhook',
+            details: error.message
+        });
+    }
+});
+
+// POST /admin/merchants/:id/test-webhook - Test webhook delivery
+router.post('/merchants/:id/test-webhook', requireAuth, async (req, res) => {
+    try {
+        const merchantId = req.params.id;
+
+        // Fetch merchant details
+        const merchantResult = await req.app.locals.db.query(
+            'SELECT * FROM merchants WHERE id = $1',
+            [merchantId]
+        );
+
+        if (merchantResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Merchant not found' });
+        }
+
+        const merchant = merchantResult.rows[0];
+
+        console.log(`[Webhook Test] Starting for ${merchant.domain}`);
+
+        // Test webhook delivery
+        const testResult = await testWebhookDelivery(
+            merchant.domain,
+            process.env.PLATFORM_ID || 'ucp_marketplace'
+        );
+
+        if (testResult.success) {
+            res.json({
+                success: true,
+                merchant_id: merchantId,
+                domain: merchant.domain,
+                message: testResult.message,
+                tested_at: testResult.tested_at
+            });
+        } else {
+            res.status(400).json({
+                success: false,
+                merchant_id: merchantId,
+                domain: merchant.domain,
+                error: testResult.error,
+                error_code: testResult.error_code,
+                message: 'Webhook test failed'
+            });
+        }
+    } catch (error) {
+        console.error('[Webhook Test] Error:', error);
+        res.status(500).json({
+            error: 'Failed to test webhook',
+            details: error.message
+        });
     }
 });
 
@@ -850,6 +1081,73 @@ async function verifyMerchantUCP(merchantId, db) {
             return `${name}: ${status}`;
         });
 
+        // Register webhook with merchant plugin (if webhooks capability is supported)
+        let webhookRegistration = null;
+        const webhooksCapability = capabilityResults.find(cap => cap.name === 'dev.ucp.shopping.webhooks');
+
+        if (webhooksCapability && webhooksCapability.supported) {
+            try {
+                // Get marketplace webhook URL from environment
+                const marketplaceWebhookUrl = process.env.MARKETPLACE_WEBHOOK_URL ||
+                    `${process.env.CORS_ORIGIN || 'https://localhost'}/api/webhooks/order-completed`;
+
+                console.log(`[Webhook Registration] Attempting registration for ${merchant.domain}`);
+                const registrationResult = await registerWebhookWithMerchant(
+                    merchant.domain,
+                    marketplaceWebhookUrl,
+                    process.env.PLATFORM_ID || 'ucp_marketplace'
+                );
+
+                webhookRegistration = registrationResult;
+
+                if (registrationResult.success) {
+                    // Store webhook registration details in database
+                    await db.query(`
+                        UPDATE merchants
+                        SET
+                            webhook_registered = true,
+                            webhook_id = $1,
+                            webhook_registered_at = NOW(),
+                            webhook_url = $2,
+                            webhook_status = 'active',
+                            updated_at = NOW()
+                        WHERE id = $3
+                    `, [
+                        registrationResult.webhook_id,
+                        marketplaceWebhookUrl,
+                        merchantId
+                    ]);
+
+                    console.log(`[Webhook Registration] Success for ${merchant.domain}: ${registrationResult.webhook_id}`);
+                } else {
+                    // Log failure but don't fail verification
+                    console.warn(`[Webhook Registration] Failed for ${merchant.domain}:`, registrationResult.error);
+
+                    await db.query(`
+                        UPDATE merchants
+                        SET
+                            webhook_registered = false,
+                            webhook_status = 'failed',
+                            webhook_error = $1,
+                            updated_at = NOW()
+                        WHERE id = $2
+                    `, [
+                        registrationResult.error,
+                        merchantId
+                    ]);
+                }
+            } catch (webhookError) {
+                console.error(`[Webhook Registration] Error for ${merchant.domain}:`, webhookError.message);
+                webhookRegistration = {
+                    success: false,
+                    error: webhookError.message,
+                    error_code: 'UNEXPECTED_ERROR'
+                };
+            }
+        } else {
+            console.log(`[Webhook Registration] Skipped for ${merchant.domain} - webhooks capability not supported`);
+        }
+
         return {
             status: 'verified',
             merchant: {
@@ -866,6 +1164,7 @@ async function verifyMerchantUCP(merchantId, db) {
                 signing_key_present: !!parsedManifest.signingKeyId,
                 summary: summaryParts.join(', ')
             },
+            webhook_registration: webhookRegistration,
             verified_at: new Date().toISOString()
         };
     } catch (error) {
