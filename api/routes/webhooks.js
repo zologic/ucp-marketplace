@@ -118,11 +118,14 @@ router.post('/order-completed', async (req, res) => {
         }
 
         // Create order record
+        // Store whichever signature was used (JWT or legacy)
+        const usedSignature = requestSignatureHeader || bodySignature;
+
         const orderResult = await req.app.locals.db.query(`
             INSERT INTO orders (tenant_id, merchant_id, checkout_session_id, referral_id, merchant_order_id, revenue_cents, currency, webhook_signature, verified, referral_source)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9)
             RETURNING id
-        `, [tenantId, merchant.id, checkoutSessionId, referral_id, order_id, total_cents, currency, signature, referralSource]);
+        `, [tenantId, merchant.id, checkoutSessionId, referral_id, order_id, total_cents, currency, usedSignature, referralSource]);
 
         const orderId = orderResult.rows[0].id;
 
