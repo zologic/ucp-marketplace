@@ -521,9 +521,10 @@ router.post('/checkout', async (req, res) => {
 
                             if (embeddedCheckoutCap && embeddedCheckoutCap.endpoint) {
                                 const endpointBase = embeddedCheckoutCap.endpoint.replace(/\/$/, '');
-                                checkoutUrl = `${endpointBase}/${session.id}?token=${session.id}`;
+                                // Add required ECP parameters for protocol activation
+                                checkoutUrl = `${endpointBase}/${session.id}?token=${session.id}&ec_version=2026-01-23&ec_delegate=payment.credential`;
                                 supportsEmbeddedCheckout = true;
-                                console.log(`[Checkout] Built embedded URL with session ID: ${checkoutUrl}`);
+                                console.log(`[Checkout] Built embedded URL with session ID and ECP params: ${checkoutUrl}`);
                             } else {
                                 // Fallback to standard checkout
                                 checkoutUrl = `https://${merchant.domain}/checkout?session=${session.id}`;
@@ -546,7 +547,8 @@ router.post('/checkout', async (req, res) => {
                 if (embeddedCheckoutCap && embeddedCheckoutCap.endpoint) {
                     supportsEmbeddedCheckout = true;
                     const endpointBase = embeddedCheckoutCap.endpoint.replace(/\/$/, '');
-                    checkoutUrl = `${endpointBase}/${referralId}`;
+                    // Add required ECP parameters for protocol activation
+                    checkoutUrl = `${endpointBase}/${referralId}?ec_version=2026-01-23&ec_delegate=payment.credential`;
                 }
             }
         }

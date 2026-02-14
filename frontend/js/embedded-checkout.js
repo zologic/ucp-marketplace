@@ -130,8 +130,15 @@ export function showEmbeddedCheckout(checkoutUrl, referralId) {
  */
 function buildEcpUrl(baseUrl, referralId) {
     const url = new URL(baseUrl);
-    url.searchParams.set('ec_version', ECP_VERSION);
-    url.searchParams.set('ec_delegate', ECP_DELEGATIONS.join(','));
+
+    // Add ECP parameters if not already present (API may have added them)
+    if (!url.searchParams.has('ec_version')) {
+        url.searchParams.set('ec_version', ECP_VERSION);
+    }
+    if (!url.searchParams.has('ec_delegate')) {
+        url.searchParams.set('ec_delegate', ECP_DELEGATIONS.join(','));
+    }
+
     // Only add ec_auth if the URL doesn't already have a token parameter
     // (merchant's API may have already included authentication)
     if (!url.searchParams.has('token') && !url.pathname.match(/\/[a-f0-9-]{36}\/?$/)) {
