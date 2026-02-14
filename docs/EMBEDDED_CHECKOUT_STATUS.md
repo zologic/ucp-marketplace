@@ -18,6 +18,13 @@ All required marketplace changes have been implemented and verified:
 - **Frontend**: Opens `continue_url` in embedded iframe for seamless delegate payment
 - **ECP Integration**: Uses standard ECP flow for payment completion notifications
 
+### 1b. ECP URL Parameter Injection ✅
+**Files:** `api/routes/public.js` (lines 524, 549), `frontend/js/embedded-checkout.js` (lines 131-145)
+
+- **API Layer**: Adds `ec_version=2026-01-23` and `ec_delegate=payment.credential` when building embedded URLs
+- **Frontend**: Validates parameters present; adds if missing (prevents duplication)
+- **Merchant Activation**: These parameters trigger ECP mode in merchant's WordPress plugin (critical for handshake)
+
 ### 2. Iframe Security for Payment Gateways ✅
 **File:** `frontend/js/embedded-checkout.js` (lines 44-65)
 
