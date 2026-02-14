@@ -94,19 +94,14 @@ export async function handleCheckout(merchantId, productId, selectedVariations =
             sessionStorage.setItem('last_session_id', data.session_id);
         }
 
-        // Check if merchant supports embedded checkout
-        if (data.embedded_checkout) {
-            // Show embedded checkout in iframe
-            // The checkout_url may be:
-            // 1. Standard embedded checkout URL (with ec_version param)
-            // 2. Delegate payment escalation URL (continue_url from requires_escalation status)
-            // Both are opened in embedded iframe for seamless user experience
-            showEmbeddedCheckout(data.checkout_url, data.referral_id);
-        } else {
-            // Traditional redirect flow
-            hideLoading();
-            showCheckoutRedirect(data.checkout_url);
-        }
+        // Always use redirect flow (embedded checkout disabled)
+        hideLoading();
+
+        // Store referral ID for potential return
+        sessionStorage.setItem('checkout_ref', data.referral_id);
+
+        // Redirect to merchant checkout
+        window.location.href = data.checkout_url;
 
     } catch (error) {
         hideLoading();
