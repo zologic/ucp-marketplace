@@ -509,10 +509,38 @@ fi
 echo ""
 
 # ============================================================================
-# STEP 8: Verification & Summary
+# STEP 8: Register Webhooks with Merchants
 # ============================================================================
 
-echo -e "${YELLOW}[8/8] Running final verification...${NC}"
+echo -e "${YELLOW}[8/9] Registering webhooks with verified merchants...${NC}"
+
+# Check if there are verified merchants
+VERIFIED_COUNT=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c "
+SELECT COUNT(*) FROM merchants WHERE status = 'verified';
+" 2>/dev/null | xargs)
+
+if [ "$VERIFIED_COUNT" -gt "0" ]; then
+    echo "Found $VERIFIED_COUNT verified merchant(s)"
+    echo "Running webhook registration migration..."
+    echo ""
+
+    # Run migration script
+    docker compose exec -T api node /app/migrate-register-webhooks.js
+
+    echo ""
+    echo -e "${GREEN}✓ Webhook registration complete${NC}"
+else
+    echo "No verified merchants found - skipping webhook registration"
+    echo "(Webhooks will register automatically when you verify merchants in admin panel)"
+fi
+
+echo ""
+
+# ============================================================================
+# STEP 9: Verification & Summary
+# ============================================================================
+
+echo -e "${YELLOW}[9/9] Running final verification...${NC}"
 
 # Check service health
 SERVICES_RUNNING=$(docker compose ps --services --filter "status=running" | wc -l)
