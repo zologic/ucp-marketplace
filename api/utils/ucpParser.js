@@ -322,21 +322,47 @@ function extractSigningKeyId(manifest) {
  * Extract and discover capabilities from manifest
  */
 function extractCapabilities(manifest, serviceBaseUrl) {
-  // UCP 2026 format: capabilities at manifest.ucp.capabilities
-  // Old format: capabilities at manifest.capabilities
-  let capabilitiesArray = manifest.capabilities;
-  if (!capabilitiesArray && manifest.ucp && manifest.ucp.capabilities) {
-    capabilitiesArray = manifest.ucp.capabilities;
+  // UCP 2026 format: capabilities at manifest.ucp.capabilities (object/dictionary)
+  // Old format: capabilities at manifest.capabilities (array)
+  let capabilitiesData = manifest.capabilities;
+  if (!capabilitiesData && manifest.ucp && manifest.ucp.capabilities) {
+    capabilitiesData = manifest.ucp.capabilities;
   }
 
-  if (!capabilitiesArray || !Array.isArray(capabilitiesArray)) {
-    throw new UcpValidationError('capabilities must be an array', {
+  if (!capabilitiesData) {
+    throw new UcpValidationError('capabilities field is required', {
+      field: 'capabilities'
+    });
+  }
+
+  // Convert UCP 2026 object format to array for processing
+  let capabilitiesArray;
+  if (Array.isArray(capabilitiesData)) {
+    // Old format: already an array
+    capabilitiesArray = capabilitiesData;
+  } else if (typeof capabilitiesData === 'object') {
+    // UCP 2026 format: object with capability IDs as keys
+    // Flatten to array: extract all capability arrays and merge
+    capabilitiesArray = [];
+    for (const [capabilityId, capabilityDefArray] of Object.entries(capabilitiesData)) {
+      if (Array.isArray(capabilityDefArray)) {
+        // Add capability ID to each definition for reference
+        capabilityDefArray.forEach(def => {
+          capabilitiesArray.push({
+            ...def,
+            name: capabilityId // Store the capability ID
+          });
+        });
+      }
+    }
+  } else {
+    throw new UcpValidationError('capabilities must be an array or object', {
       field: 'capabilities'
     });
   }
 
   if (capabilitiesArray.length === 0) {
-    throw new UcpValidationError('capabilities array cannot be empty', {
+    throw new UcpValidationError('capabilities cannot be empty', {
       field: 'capabilities'
     });
   }
