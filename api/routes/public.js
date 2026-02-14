@@ -500,8 +500,15 @@ router.post('/checkout', async (req, res) => {
                     if (checkoutResponse.data) {
                         const session = checkoutResponse.data;
 
+                        // DELEGATE PAYMENT ESCALATION: Check if merchant returns continue_url (requires_escalation status)
+                        if (session.status === 'requires_escalation' && session.continue_url) {
+                            // Delegate payment flow: Open continue_url in embedded iframe
+                            checkoutUrl = session.continue_url;
+                            supportsEmbeddedCheckout = true;
+                            console.log(`[Checkout] Delegate payment escalation - using continue_url: ${checkoutUrl}`);
+                        }
                         // Check if merchant returns embedded_checkout_url
-                        if (session.embedded_checkout_url) {
+                        else if (session.embedded_checkout_url) {
                             // Use the embedded checkout URL directly (already has token)
                             checkoutUrl = session.embedded_checkout_url;
                             supportsEmbeddedCheckout = true;
