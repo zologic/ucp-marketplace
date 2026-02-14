@@ -237,6 +237,20 @@ router.post('/merchants/:id/verify', requireAuth, async (req, res) => {
     }
 });
 
+// POST /admin/merchants/:id/register-webhook - Register marketplace webhook with merchant
+router.post('/merchants/:id/register-webhook', requireAuth, async (req, res) => {
+    try {
+        const merchantId = req.params.id;
+
+        const result = await registerWebhookWithMerchant(merchantId, req.app.locals.db);
+
+        res.json(result);
+    } catch (error) {
+        console.error('Register webhook error:', error);
+        res.status(500).json({ error: 'Webhook registration failed', details: error.message });
+    }
+});
+
 // POST /admin/merchants/:id/activate - Activate merchant
 router.post('/merchants/:id/activate', requireAuth, async (req, res) => {
     try {
@@ -832,6 +846,34 @@ async function verifyMerchantUCP(merchantId, db) {
             'verified',
             merchantId
         ]);
+
+        // Register marketplace webhook URL with merchant plugin (if webhooks supported)
+        const webhookCapability = parsedManifest.capabilities.find(c => c.name === 'dev.ucp.shopping.webhooks');
+        if (webhookCapability && webhookCapability.supported && parsedManifest.serviceBaseUrl) {
+            try {
+                // Get marketplace webhook URL
+                const marketplaceWebhookUrl = process.env.PUBLIC_URL
+                    ? `${process.env.PUBLIC_URL}/api/webhooks/order-completed`
+                    : 'https://bizform.app/api/webhooks/order-completed';
+
+                // Register via MCP RPC
+                const mcpEndpoint = `${parsedManifest.serviceBaseUrl}/mcp-rpc`;
+                await axios.post(mcpEndpoint, {
+                    jsonrpc: '2.0',
+                    method: 'ucp_register_webhook',
+                    params: {
+                        platform_id: 'bizform_app',
+                        webhook_url: marketplaceWebhookUrl
+                    },
+                    id: `reg_${Date.now()}`
+                }, { timeout: 10000 });
+
+                console.log(`[Merchant Verify] ✓ Registered webhook URL with ${merchant.domain}`);
+            } catch (webhookRegError) {
+                // Don't fail verification if webhook registration fails
+                console.error(`[Merchant Verify] Failed to register webhook with ${merchant.domain}:`, webhookRegError.message);
+            }
+        }
 
         // Build verification results with capability discovery
         const capabilityResults = parsedManifest.capabilities;
@@ -1982,6 +2024,70 @@ async function logAuditEvent(db, adminId, action, resourceType, resourceId, deta
         `, [adminId, action, resourceType, resourceId, JSON.stringify(details)]);
     } catch (error) {
         console.warn('Audit log insert failed:', error.message);
+    }
+}
+
+// Helper: Register marketplace webhook URL with merchant plugin
+async function registerWebhookWithMerchant(merchantId, db) {
+    const merchantResult = await db.query('SELECT * FROM merchants WHERE id = $1', [merchantId]);
+
+    if (merchantResult.rows.length === 0) {
+        throw new Error('Merchant not found');
+    }
+
+    const merchant = merchantResult.rows[0];
+
+    if (!merchant.service_base_url) {
+        throw new Error('Merchant has no service_base_url. Verify merchant first.');
+    }
+
+    if (merchant.status !== 'verified') {
+        throw new Error('Merchant not verified. Run verification first.');
+    }
+
+    // Get marketplace webhook URL
+    const marketplaceWebhookUrl = process.env.PUBLIC_URL
+        ? `${process.env.PUBLIC_URL}/api/webhooks/order-completed`
+        : 'https://bizform.app/api/webhooks/order-completed';
+
+    try {
+        // Register via MCP RPC
+        const mcpEndpoint = `${merchant.service_base_url}/mcp-rpc`;
+        const response = await axios.post(mcpEndpoint, {
+            jsonrpc: '2.0',
+            method: 'ucp_register_webhook',
+            params: {
+                platform_id: 'bizform_app',
+                webhook_url: marketplaceWebhookUrl
+            },
+            id: `reg_${Date.now()}`
+        }, { timeout: 10000 });
+
+        console.log(`[Webhook Registration] ✓ Registered with ${merchant.domain}`);
+
+        return {
+            status: 'success',
+            merchant: {
+                id: merchant.id,
+                domain: merchant.domain,
+                business_name: merchant.business_name
+            },
+            webhook_url: marketplaceWebhookUrl,
+            mcp_response: response.data,
+            registered_at: new Date().toISOString()
+        };
+    } catch (error) {
+        console.error(`[Webhook Registration] Failed for ${merchant.domain}:`, error.message);
+
+        // Determine error code
+        let errorCode = 'UNKNOWN_ERROR';
+        if (error.code === 'ENOTFOUND') errorCode = 'DNS_ERROR';
+        else if (error.code === 'ETIMEDOUT') errorCode = 'TIMEOUT';
+        else if (error.code === 'ECONNREFUSED') errorCode = 'CONNECTION_REFUSED';
+        else if (error.response?.status === 404) errorCode = 'ENDPOINT_NOT_FOUND';
+        else if (error.response?.status === 400) errorCode = 'INVALID_REQUEST';
+
+        throw new Error(`Webhook registration failed: ${error.message} (${errorCode})`);
     }
 }
 
