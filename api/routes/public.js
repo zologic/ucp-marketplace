@@ -500,38 +500,30 @@ router.post('/checkout', async (req, res) => {
                     if (checkoutResponse.data) {
                         const session = checkoutResponse.data;
 
-                        // DELEGATE PAYMENT ESCALATION: Check if merchant returns continue_url (requires_escalation status)
-                        if (session.status === 'requires_escalation' && session.continue_url) {
-                            // Delegate payment flow: Open continue_url in embedded iframe
-                            checkoutUrl = session.continue_url;
-                            supportsEmbeddedCheckout = true;
-                            console.log(`[Checkout] Delegate payment escalation - using continue_url: ${checkoutUrl}`);
-                        }
-                        // Check if merchant returns embedded_checkout_url
-                        else if (session.embedded_checkout_url) {
-                            // Use the embedded checkout URL directly (already has token)
-                            checkoutUrl = session.embedded_checkout_url;
-                            supportsEmbeddedCheckout = true;
-                            console.log(`[Checkout] Using embedded_checkout_url: ${checkoutUrl}`);
-                        } else if (session.id) {
-                            // Build embedded URL using session ID if capability is supported
-                            const embeddedCheckoutCap = merchant.ucp_manifest.capabilities?.find(
-                                cap => cap.name === 'dev.ucp.shopping.embedded_checkout' && cap.supported === true
-                            );
-
-                            if (embeddedCheckoutCap && embeddedCheckoutCap.endpoint) {
-                                const endpointBase = embeddedCheckoutCap.endpoint.replace(/\/$/, '');
-                                // Add required ECP parameters for protocol activation
-                                checkoutUrl = `${endpointBase}/${session.id}?token=${session.id}&ec_version=2026-01-23&ec_delegate=payment.credential`;
-                                supportsEmbeddedCheckout = true;
-                                console.log(`[Checkout] Built embedded URL with session ID and ECP params: ${checkoutUrl}`);
-                            } else {
-                                // Fallback to standard checkout
-                                checkoutUrl = `https://${merchant.domain}/checkout?session=${session.id}`;
-                            }
-                        } else if (session.checkout_url) {
+                        // Use session-provided checkout URL or build from endpoint
+                        if (session.checkout_url) {
                             checkoutUrl = session.checkout_url;
+                        } else if (session.embedded_checkout_url) {
+                            checkoutUrl = session.embedded_checkout_url;
+                        } else if (session.continue_url) {
+                            checkoutUrl = session.continue_url;
+                        } else if (session.id && checkoutService.endpoint) {
+                            // Build URL from checkout endpoint
+                            const endpointBase = checkoutService.endpoint.replace(/\/$/, '');
+                            checkoutUrl = `${endpointBase}/${session.id}`;
+                        } else {
+                            // Fallback to standard checkout
+                            checkoutUrl = `https://${merchant.domain}/checkout?session=${session.id || referralId}`;
                         }
+
+                        // Add return URLs for completion tracking
+                        const returnUrl = new URL(checkoutUrl);
+                        const marketplaceBase = `https://${req.get('host')}`;
+                        returnUrl.searchParams.set('return_url', `${marketplaceBase}/checkout/success?ref=${referralId}`);
+                        returnUrl.searchParams.set('cancel_url', `${marketplaceBase}/checkout/cancel?ref=${referralId}`);
+                        checkoutUrl = returnUrl.toString();
+
+                        console.log(`[Checkout] Redirect URL with return URLs: ${checkoutUrl}`);
                     }
                 } catch (apiError) {
                     console.error('[Checkout] Failed to create merchant checkout session:', apiError.response?.data || apiError.message);
@@ -539,17 +531,13 @@ router.post('/checkout', async (req, res) => {
                     checkoutUrl = `https://${merchant.domain}/checkout?ref=${referralId}`;
                 }
             } else {
-                // No checkout creation service, check for embedded checkout capability
-                const embeddedCheckoutCap = merchant.ucp_manifest.capabilities?.find(
-                    cap => cap.name === 'dev.ucp.shopping.embedded_checkout' && cap.supported === true
-                );
+                // No checkout creation service, use direct checkout URL
+                checkoutUrl = `https://${merchant.domain}/checkout?ref=${referralId}`;
 
-                if (embeddedCheckoutCap && embeddedCheckoutCap.endpoint) {
-                    supportsEmbeddedCheckout = true;
-                    const endpointBase = embeddedCheckoutCap.endpoint.replace(/\/$/, '');
-                    // Add required ECP parameters for protocol activation
-                    checkoutUrl = `${endpointBase}/${referralId}?ec_version=2026-01-23&ec_delegate=payment.credential`;
-                }
+                // Add return URLs
+                const marketplaceBase = `https://${req.get('host')}`;
+                checkoutUrl += `&return_url=${encodeURIComponent(`${marketplaceBase}/checkout/success?ref=${referralId}`)}`;
+                checkoutUrl += `&cancel_url=${encodeURIComponent(`${marketplaceBase}/checkout/cancel?ref=${referralId}`)}`;
             }
         }
 
@@ -559,12 +547,12 @@ router.post('/checkout', async (req, res) => {
             VALUES ($1, $2, $3, $4, $5, 'created', $6)
         `, [tenantId, merchant_id, product_id, referralId, checkoutUrl, referral_source || 'UNKNOWN']);
 
-        // Return checkout info with embedded support flag
+        // Return checkout info - always use redirect flow (no embedded)
         res.json({
             checkout_url: checkoutUrl,
             referral_id: referralId,
             session_id: sessionId, // For debugging/logging only
-            embedded_checkout: supportsEmbeddedCheckout // NEW: Tells frontend to use iframe
+            embedded_checkout: false // Always redirect, never embed
         });
     } catch (error) {
         console.error('Checkout error:', error);
@@ -614,6 +602,72 @@ function hashIntent(intent) {
     const normalized = `${intent.category || ''}|${intent.brand || ''}|${intent.max_price_cents || ''}|${intent.currency || ''}`;
     return crypto.createHash('sha256').update(normalized).digest('hex');
 }
+
+// Checkout status endpoint (for success page polling)
+router.get('/checkout/status', async (req, res) => {
+    try {
+        const { ref } = req.query;
+
+        if (!ref) {
+            return res.status(400).json({ error: 'Reference ID required' });
+        }
+
+        // Check checkout session
+        const sessionResult = await req.app.locals.db.query(
+            'SELECT status FROM checkout_sessions WHERE referral_id = $1',
+            [ref]
+        );
+
+        if (sessionResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+
+        const session = sessionResult.rows[0];
+
+        // Check for completed order
+        const orderResult = await req.app.locals.db.query(
+            'SELECT id, external_order_id FROM orders WHERE referral_id = $1',
+            [ref]
+        );
+
+        if (orderResult.rows.length > 0) {
+            return res.json({
+                status: 'completed',
+                order_id: orderResult.rows[0].external_order_id || orderResult.rows[0].id
+            });
+        }
+
+        // Return session status
+        res.json({
+            status: session.status || 'pending'
+        });
+    } catch (error) {
+        console.error('Status check error:', error);
+        res.status(500).json({ error: 'Failed to check status' });
+    }
+});
+
+// Checkout cancellation endpoint
+router.post('/checkout/cancel', async (req, res) => {
+    try {
+        const { referral_id } = req.body;
+
+        if (!referral_id) {
+            return res.status(400).json({ error: 'Reference ID required' });
+        }
+
+        // Update checkout session status
+        await req.app.locals.db.query(
+            'UPDATE checkout_sessions SET status = $1 WHERE referral_id = $2 AND status = $3',
+            ['cancelled', referral_id, 'created']
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Cancellation error:', error);
+        res.status(500).json({ error: 'Failed to record cancellation' });
+    }
+});
 
 // Mount onboarding routes
 router.use('/', onboardRoutes);

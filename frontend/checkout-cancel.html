@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkout Cancelled - Marketplace</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        .cancel-container {
+            max-width: 600px;
+            margin: 100px auto;
+            padding: 40px;
+            text-align: center;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .cancel-icon {
+            font-size: 64px;
+            color: #ef4444;
+            margin-bottom: 20px;
+        }
+        .cancel-title {
+            font-size: 28px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 12px;
+        }
+        .cancel-message {
+            font-size: 16px;
+            color: #6b7280;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+        .cancel-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+            font-size: 15px;
+        }
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+        }
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+        .info-box {
+            margin: 30px 0;
+            padding: 20px;
+            background: #fef3f2;
+            border-radius: 8px;
+            border: 1px solid #fee2e2;
+        }
+        .info-text {
+            font-size: 14px;
+            color: #991b1b;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="cancel-container">
+        <div class="cancel-icon">✕</div>
+        <h1 class="cancel-title">Checkout Cancelled</h1>
+        <p class="cancel-message">
+            Your order was not completed. No charges have been made to your payment method.
+        </p>
+
+        <div class="info-box">
+            <p class="info-text">
+                <strong>Need help?</strong><br>
+                If you experienced any issues during checkout, please contact customer support.
+            </p>
+        </div>
+
+        <div class="cancel-actions">
+            <a href="/" class="btn btn-primary">Return to Marketplace</a>
+            <button onclick="history.back()" class="btn btn-secondary">Go Back</button>
+        </div>
+    </div>
+
+    <script>
+        // Log cancellation for analytics
+        const urlParams = new URLSearchParams(window.location.search);
+        const referralId = urlParams.get('ref');
+
+        if (referralId) {
+            // Optionally update checkout session status
+            fetch(`/api/checkout/cancel`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ referral_id: referralId })
+            }).catch(err => console.error('Failed to log cancellation:', err));
+        }
+    </script>
+</body>
+</html>
