@@ -500,21 +500,22 @@ router.post('/checkout', async (req, res) => {
                     if (checkoutResponse.data) {
                         const session = checkoutResponse.data;
 
-                        // Use session-provided checkout URL or build from endpoint
+                        // For redirect flow, use standard checkout URLs (NOT embedded)
+                        // Priority: checkout_url > continue_url > build from domain
                         if (session.checkout_url) {
                             checkoutUrl = session.checkout_url;
-                        } else if (session.embedded_checkout_url) {
-                            checkoutUrl = session.embedded_checkout_url;
-                        } else if (session.continue_url) {
+                        } else if (session.continue_url && !session.continue_url.includes('/embedded-checkout/')) {
+                            // Use continue_url only if it's not the embedded endpoint
                             checkoutUrl = session.continue_url;
-                        } else if (session.id && checkoutService.endpoint) {
-                            // Build URL from checkout endpoint
-                            const endpointBase = checkoutService.endpoint.replace(/\/$/, '');
-                            checkoutUrl = `${endpointBase}/${session.id}`;
+                        } else if (session.id) {
+                            // Build standard checkout URL from merchant domain
+                            checkoutUrl = `https://${merchant.domain}/checkout/${session.id}?token=${session.id}`;
                         } else {
-                            // Fallback to standard checkout
-                            checkoutUrl = `https://${merchant.domain}/checkout?session=${session.id || referralId}`;
+                            // Ultimate fallback
+                            checkoutUrl = `https://${merchant.domain}/checkout?ref=${referralId}`;
                         }
+
+                        // Skip embedded_checkout_url entirely - that's for iframe/ECP only
 
                         // Add return URLs for completion tracking
                         const returnUrl = new URL(checkoutUrl);
