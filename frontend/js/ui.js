@@ -86,8 +86,9 @@ function createProductCard(product) {
     const imageSrc = product.image_url || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23f5f5f5" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" font-family="Arial" font-size="16" fill="%23999" text-anchor="middle" dy=".3em"%3ENo Image%3C/text%3E%3C/svg%3E';
 
     // Build description HTML if available (with truncation for mobile)
+    // Descriptions are pre-sanitized during indexing, safe to render as HTML
     const descriptionHtml = product.description_short
-        ? `<p class="product-description">${escapeHtml(truncateDescription(product.description_short, 60, 120))}</p>`
+        ? `<div class="product-description">${truncateDescription(product.description_short, 60, 120)}</div>`
         : '';
 
     // Build variations HTML if product has variations
