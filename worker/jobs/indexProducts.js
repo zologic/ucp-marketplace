@@ -95,10 +95,24 @@ async function indexProducts(db) {
                 // Upsert products into database with signing_status = 'pending'
                 for (const product of products) {
                     try {
+                        // Sanitize HTML descriptions (remove Elementor tracking attributes)
+                        const sanitizeDescription = (html) => {
+                            if (!html) return null;
+                            // Remove data-start and data-end attributes from Elementor
+                            return html
+                                .replace(/\s*data-start="[^"]*"/g, '')
+                                .replace(/\s*data-end="[^"]*"/g, '')
+                                .replace(/\s*data-id="[^"]*"/g, '')
+                                .replace(/\s*data-element_type="[^"]*"/g, '')
+                                .trim();
+                        };
+
                         // Process description fields
-                        const descriptionShort = product.description_short ||
-                            (product.description ? product.description.substring(0, 150) + (product.description.length > 150 ? '...' : '') : null);
-                        const descriptionLong = product.description_long || product.description || null;
+                        const descriptionShort = sanitizeDescription(
+                            product.description_short ||
+                            (product.description ? product.description.substring(0, 150) + (product.description.length > 150 ? '...' : '') : null)
+                        );
+                        const descriptionLong = sanitizeDescription(product.description_long || product.description) || null;
 
                         // CRITICAL: Parse price FIRST (before variations processing needs it)
                         // WooCommerce UCP sends price.amount in cents (1000 = ten euros)
